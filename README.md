@@ -2,6 +2,11 @@
 
 Trabajo de Investigación de Operaciones 1: simulación de eventos discretos del despacho de pedidos en la distribuidora mayorista DENLU (Tarma, Junín). Valida el plan de personal obtenido con programación lineal entera (MILP) y mide su robustez ante crecimiento de la demanda, ausentismo, horas extra y margen bruto.
 
+## Ver en línea
+
+- **Simulador interactivo:** https://efustion23.github.io/denlu-simulacion/
+- **Notebook en Google Colab:** [abrir](https://colab.research.google.com/github/Efustion23/denlu-simulacion/blob/main/Simulacion/Denlu_Simulacion.ipynb)
+
 ## Contenido
 
 | Archivo | Qué es |
