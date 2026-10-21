@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Andén DENLU</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="estilos.css">
+</head>
+<body>
+  <div class="marco">
+    <aside class="lateral" aria-label="Controles de la simulación">
+      <div class="marca">
+        <svg viewBox="0 0 32 32" width="32" height="32" aria-hidden="true">
+          <rect x="3" y="8" width="26" height="20" rx="2" fill="var(--carton)"/>
+          <rect x="3" y="8" width="26" height="6" rx="2" fill="var(--carton-borde)"/>
+          <rect x="13.5" y="8" width="5" height="20" fill="var(--seguridad)"/>
+        </svg>
+        <div>
+          <p class="marca-nombre">DENLU</p>
+          <p class="marca-ambito">Almacén de Tarma</p>
+        </div>
+      </div>
+
+      <section aria-labelledby="tPersonal">
+        <h2 id="tPersonal">Personal</h2>
+        <div class="presets" id="presets" role="group" aria-label="Planes guardados"></div>
+        <p class="eje-turnos" aria-hidden="true"><span>8h</span><span>18h</span></p>
+        <table class="turnos" id="turnos"></table>
+        <p class="costo"><span id="costoMes"></span> al mes</p>
+        <p class="aviso" id="avisoPT" hidden>El part-time supera el 40 % del personal que permite el D.S. 003-97-TR.</p>
+        <div class="grafico grafico-cobertura"><canvas id="gCobertura" aria-label="Despachadores por hora frente al mínimo requerido"></canvas></div>
+      </section>
+
+      <section aria-labelledby="tEscenario">
+        <h2 id="tEscenario">Escenario</h2>
+        <label class="control">
+          <span>Crecimiento de la demanda <output id="vCrec"></output></span>
+          <input type="range" id="crec" min="0" max="60" step="5" value="0">
+        </label>
+        <label class="control">
+          <span>Ausentismo diario <output id="vAus"></output></span>
+          <input type="range" id="aus" min="0" max="20" step="1" value="0">
+        </label>
+        <label class="control">
+          <span>Espera máxima antes de perder la ruta <output id="vT"></output></span>
+          <input type="range" id="T" min="5" max="60" step="1" value="20">
+        </label>
+        <label class="control">
+          <span>Probabilidad de cancelar tras perderla <output id="vP"></output></span>
+          <input type="range" id="p" min="0" max="1" step="0.01" value="0.28">
+        </label>
+      </section>
+
+      <section aria-labelledby="tValoracion">
+        <h2 id="tValoracion">Valoración</h2>
+        <label class="control">
+          <span>Margen bruto de un pedido <output id="vMargen"></output></span>
+          <input type="range" id="margen" min="5" max="100" step="5" value="100">
+        </label>
+        <label class="control">
+          <span>Costo de una hora extra <output id="vHx"></output></span>
+          <input type="range" id="hx" min="0" max="15" step="0.01" value="5.34">
+        </label>
+        <p class="nota">Con 100 % la venta perdida se cuenta a precio de venta, como en el notebook. Solo se pagan como extra las horas después del cierre de las 18:00.</p>
+        <button type="button" class="enlace" id="restaurar">Volver a los valores iniciales</button>
+      </section>
+    </aside>
+
+    <main class="hoja">
+      <header class="titulo">
+        <div>
+          <h1>Andén de despacho</h1>
+          <p class="hallazgo" id="hallazgo" aria-live="polite">Simulando el año…</p>
+        </div>
+        <p class="plan-elegido" id="planElegido"></p>
+      </header>
+
+      <ol class="guia" aria-label="Cómo usar el simulador">
+        <li><strong>Elige el personal</strong> a la izquierda: cuántos despachadores entran en cada turno.</li>
+        <li><strong>Mira un día</strong> en el almacén: los pedidos llegan, esperan y se cargan en los camiones.</li>
+        <li><strong>Compara el año</strong> con la situación actual: cancelaciones, esperas y costos.</li>
+      </ol>
+
+      <dl class="kpis" id="kpis" aria-label="Resumen del año simulado"></dl>
+      <p class="ayuda" id="ayuda"></p>
+
+      <section class="bloque" aria-labelledby="tDia">
+        <div class="bloque-cab">
+          <h2 id="tDia">Un día en el almacén</h2>
+          <span class="estado" id="estadoDia" aria-live="polite"></span>
+        </div>
+        <p class="narracion" id="narracion"></p>
+        <div class="lienzo"><canvas id="lienzo" role="img" aria-label="Vista del almacén: cola de pedidos, despachadores y andén de carga"></canvas></div>
+        <ul class="leyenda" aria-label="Qué significa cada cosa">
+          <li><span class="sw sw-caja"></span>Pedido esperando (la barra amarilla es su espera)</li>
+          <li><span class="sw sw-perdio"></span>Esperó más de <span id="leyendaT">20</span> min y perdió su camión</li>
+          <li><span class="sw sw-cancelo"></span>El cliente canceló</li>
+          <li><span class="sw sw-desp"></span>Despachador trabajando</li>
+          <li><span class="sw sw-fuera"></span>Puesto vacío (almuerzo o fuera de turno)</li>
+        </ul>
+        <div class="reproductor">
+          <button type="button" id="play" class="primario">Reproducir</button>
+          <button type="button" id="reiniciar">Reiniciar día</button>
+          <button type="button" id="otroDia">Otro día</button>
+          <label class="velocidad">Velocidad
+            <select id="velocidad">
+              <option value="5">1 s = 5 min</option>
+              <option value="15" selected>1 s = 15 min</option>
+              <option value="30">1 s = 30 min</option>
+              <option value="60">1 s = 1 hora</option>
+            </select>
+          </label>
+        </div>
+        <dl class="contadores" id="contadores"></dl>
+        <div class="grafico grafico-dia"><canvas id="gDia" aria-label="Pedidos en cola y despachadores en turno durante el día"></canvas></div>
+      </section>
+
+      <section class="bloque" aria-labelledby="tAnio">
+        <div class="bloque-cab">
+          <h2 id="tAnio">Un año simulado</h2>
+          <span class="estado">299 días, 10 réplicas, intervalo de confianza al 95 %</span>
+        </div>
+        <table class="resultados" id="resultados"></table>
+        <p class="roi" id="roi"></p>
+        <div class="graficos-hora">
+          <div class="grafico"><canvas id="gEspera" aria-label="Espera media por hora de llegada"></canvas></div>
+          <div class="grafico"><canvas id="gPerdida" aria-label="Pérdida de ruta por hora de llegada"></canvas></div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <script src="simulacion.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

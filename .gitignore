@@ -1,0 +1,8 @@
+# Herramientas locales (no son parte del trabajo)
+.claude/
+.agents/
+.taste-skill/
+skills-lock.json
+
+.ipynb_checkpoints/
+__pycache__/
