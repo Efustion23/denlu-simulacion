@@ -21,6 +21,20 @@ function leerColores() {
     'acero', 'rojo', 'verde', 'serie-plan', 'serie-actual', 'control']) C[k] = cs.getPropertyValue('--' + k).trim();
 }
 
+/* ---------- Tema claro / oscuro ---------- */
+
+const raiz = document.documentElement;
+const sistemaOscuro = matchMedia('(prefers-color-scheme: dark)');
+const esOscuro = () => (raiz.dataset.theme ? raiz.dataset.theme === 'dark' : sistemaOscuro.matches);
+function pintarBotonTema() { $('tema').setAttribute('aria-pressed', esOscuro()); }
+function cambioTema() { leerColores(); crearGraficos(); pintarBotonTema(); }
+$('tema').addEventListener('click', () => {
+  raiz.dataset.theme = esOscuro() ? 'light' : 'dark';
+  try { localStorage.setItem('denlu-tema', raiz.dataset.theme); } catch (e) { /* sin almacenamiento: no se recuerda */ }
+  cambioTema();
+});
+sistemaOscuro.addEventListener('change', cambioTema);
+
 /* ---------- Controles ---------- */
 
 // El horario del turno dibujado: una celda por hora de 8 a 18; el hueco del medio es el almuerzo
@@ -36,6 +50,7 @@ function tiraTurno(horas) {
 $('presets').innerHTML = Object.entries(S.PLANES)
   .map(([k, v]) => `<button type="button" data-preset="${k}">${v.nombre}</button>`).join('');
 $('turnos').innerHTML = Object.entries(S.TURNOS).map(([t, d]) => `
+  ${t === 'Fijo' ? '<tr class="separador"><td colspan="2">Situación actual</td></tr>' : ''}
   <tr><td><span class="nombre">${t}</span>${tiraTurno(d.horas)}<span class="horario">${d.horario}</span></td>
   <td><div class="paso">
     <button type="button" data-t="${t}" data-d="-1" aria-label="Quitar un despachador ${t}">−</button>
@@ -65,8 +80,10 @@ function cambioPlan() {
   document.querySelectorAll('#turnos output').forEach((o) => { o.textContent = estado.plan[o.dataset.t] || 0; });
   $('planElegido').innerHTML = `Plan: <strong>${estado.preset ? S.PLANES[estado.preset].nombre : 'Personalizado'}</strong>`;
   $('costoMes').textContent = soles(S.costoMensual(estado.plan));
-  const pt = Object.entries(estado.plan).reduce((s, [t, n]) => s + (S.TURNOS[t].parcial ? n : 0), 0);
-  $('avisoPT').hidden = pt <= 0.4 * totalPersonas(estado.plan);
+  const n = totalPersonas(estado.plan);
+  $('totalPersonas').textContent = `${n} despachador${n === 1 ? '' : 'es'}`;
+  const pt = Object.entries(estado.plan).reduce((s, [t, c]) => s + (S.TURNOS[t].parcial ? c : 0), 0);
+  $('avisoPT').hidden = pt <= 0.4 * n;
   actualizarCobertura();
   nuevoDia();
   programarAnio();
@@ -103,6 +120,7 @@ function sincronizarDeslizadores() {
 
 const graficos = {};
 let resultados = null;
+let base = null;                       // situación actual simulada sin estrés, para compararla con 2025
 
 const FUENTE = 'Barlow, system-ui, sans-serif';
 function opcionesBase(titulo, extra = {}) {
@@ -123,6 +141,7 @@ function opcionesBase(titulo, extra = {}) {
 }
 const etiquetasHora = S.HORAS.map((h) => `${h}h`);
 const barra = (label, color, data = []) => ({ label, data, backgroundColor: color, borderRadius: 4, borderSkipped: 'bottom', barPercentage: 0.9, categoryPercentage: 0.75 });
+const rhoActual = S.LAMBDA.map((l) => l / (S.PLANES.actual.plan.Fijo * S.MU_H));
 
 function crearGraficos() {
   if (!window.Chart) return;
@@ -168,9 +187,35 @@ function crearGraficos() {
     options: opcionesBase('Pedidos que pierden su ruta por hora de llegada (%)'),
   });
 
+  // Punto de partida: utilización de los 3 despachadores actuales y ajuste del modelo al histórico de 2025
+  const opRho = opcionesBase('Utilización actual por hora (ρ)');
+  opRho.plugins.legend.display = false;
+  graficos.rho = new Chart($('gRho'), {
+    data: {
+      labels: etiquetasHora,
+      datasets: [
+        { type: 'bar', ...barra('ρ con 3 despachadores', rhoActual.map((r) => (r >= 1 ? C.rojo : r > 0.85 ? C.seguridad : C.acero)), rhoActual) },
+        { type: 'line', label: 'Objetivo ρ = 0.85', data: rhoActual.map(() => 0.85), borderColor: C.tinta, borderWidth: 1.5, borderDash: [4, 3], pointRadius: 0 },
+        { type: 'line', label: 'ρ = 1: la cola crece sin límite', data: rhoActual.map(() => 1), borderColor: C.rojo, borderWidth: 1.5, pointRadius: 0 },
+      ],
+    },
+    options: opRho,
+  });
+  graficos.valEspera = new Chart($('gValEspera'), {
+    type: 'bar',
+    data: { labels: etiquetasHora, datasets: [barra('Histórico 2025', C.carton, S.HIST_ESPERA), barra('Simulado', C['serie-actual'])] },
+    options: opcionesBase('Espera: 2025 y simulada (min)'),
+  });
+  graficos.valPerdida = new Chart($('gValPerdida'), {
+    type: 'bar',
+    data: { labels: etiquetasHora, datasets: [barra('Histórico 2025', C.carton, S.HIST_PERDIDA), barra('Simulado', C['serie-actual'])] },
+    options: opcionesBase('Pérdida de ruta: 2025 y simulada (%)'),
+  });
+
   actualizarCobertura();
   if (dia) graficos.dia.data.datasets.forEach((ds, i) => { ds.data = i ? dia.serie.turno : dia.serie.cola; });
   if (resultados) pintarAnio();
+  pintarBase();
 }
 
 function actualizarCobertura() {
@@ -181,10 +226,24 @@ function actualizarCobertura() {
   g.update();
 }
 
+function pintarBase() {
+  if (!base || !graficos.valEspera) return;
+  graficos.valEspera.data.datasets[1].data = base.porHora.map((h) => h.espera);
+  graficos.valPerdida.data.datasets[1].data = base.porHora.map((h) => h.perdida);
+  graficos.valEspera.update();
+  graficos.valPerdida.update();
+}
+
 /* ---------- Año simulado ---------- */
 
 let temporizador = null;
 const cacheActual = new Map();
+const evaluarActual = (esc) => {
+  const clave = JSON.stringify(esc);
+  if (!cacheActual.has(clave)) cacheActual.set(clave, S.evaluar(S.PLANES.actual.plan, esc));
+  return cacheActual.get(clave);
+};
+
 function programarAnio() {
   clearTimeout(temporizador);
   $('resultados').setAttribute('aria-busy', 'true');
@@ -196,12 +255,12 @@ function programarAnio() {
       $('kpis').innerHTML = '';
       $('hallazgo').textContent = 'Sin despachadores no hay operación que simular: agrega uno en Personal.';
       $('roi').textContent = '';
+      $('ayuda').textContent = '';
+      $('alerta').hidden = true;
       return;
     }
     const esc = escenario();
-    const clave = JSON.stringify(esc);
-    if (!cacheActual.has(clave)) cacheActual.set(clave, S.evaluar(S.PLANES.actual.plan, esc));
-    resultados = { plan: S.evaluar(estado.plan, esc), actual: cacheActual.get(clave) };
+    resultados = { plan: S.evaluar(estado.plan, esc), actual: evaluarActual(esc) };
     pintarAnio();
   }, 200);
 }
@@ -244,15 +303,26 @@ function pintarAnio() {
     kpi('Planilla al mes', soles(S.costoMensual(estado.plan)), `${totalPersonas(estado.plan)} despachadores`),
   ].join('');
   $('kpis').setAttribute('aria-busy', 'false');
-  $('ayuda').textContent = `Cómo leerlo: un pedido que espera más de ${estado.T} min pierde su camión y, a veces, el cliente cancela. `
+  $('ayuda').textContent = `Un pedido que espera más de ${estado.T} min pierde su camión y, a veces, el cliente cancela. `
     + `El costo total suma la planilla, las horas extra y lo que se deja de vender. Todo se compara con hoy: 3 despachadores fijos.`;
 
-  // Hallazgo: la hora en que el plan elegido pierde más rutas
+  const plural = (n) => `${n} despachador${n === 1 ? '' : 'es'}`;
+  $('hallazgo').innerHTML = `Con este plan se cancela el <strong>${pct2(plan.cancelados)}</strong> de los pedidos (hoy ${pct2(actual.cancelados)}) `
+    + `y cada uno espera <strong>${min1(plan.espera)}</strong> en promedio.`;
+
+  // Aviso: la hora en que el plan elegido pierde más rutas, si es grave
   const peor = plan.porHora.reduce((m, h, i) => (h.perdida > plan.porHora[m].perdida ? i : m), 0);
-  const horaPeor = `${S.HORAS[peor]}:00`;
-  $('hallazgo').innerHTML = plan.porHora[peor].perdida < 5
-    ? `Ninguna hora pierde más del 5 % de sus rutas con este plan.`
-    : `Hora más débil: <strong>${horaPeor}</strong>, donde ${plan.porHora[peor].perdida.toFixed(0)} % de los pedidos pierde su ruta con ${S.personalPorHora(estado.plan)[peor]} despachador${S.personalPorHora(estado.plan)[peor] === 1 ? '' : 'es'} en turno.`;
+  const perdida = plan.porHora[peor].perdida, perdidaHoy = actual.porHora[peor].perdida;
+  const enTurno = S.personalPorHora(estado.plan)[peor];
+  const alerta = $('alerta');
+  alerta.hidden = perdida < 15;
+  if (!alerta.hidden) {
+    const titulo = perdida > perdidaHoy + 5 ? `A las ${S.HORAS[peor]}:00 el plan es peor que la situación actual` : `Hora más débil: ${S.HORAS[peor]}:00`;
+    const motivo = enTurno === 1
+      ? ` Con un solo despachador, un pedido que llega con él ocupado espera un servicio completo (${S.MU_MIN} min), más que los ${estado.T} min de espera máxima: cumplir ρ ≤ 0.85 no basta con un solo servidor.`
+      : ` Hay ${plural(enTurno)} en turno y no alcanzan para la demanda de esa hora.`;
+    alerta.innerHTML = `<strong>${titulo}</strong>${perdida.toFixed(0)} % de los pedidos pierde su ruta (hoy ${perdidaHoy.toFixed(0)} %) con ${plural(enTurno)} en turno.${motivo}`;
+  }
 
   // Inversión = planilla + horas extra; lo recuperado se valora al margen bruto elegido
   const inversion = plan.planilla + plan.costoHorasExtra - actual.planilla - actual.costoHorasExtra;
@@ -277,24 +347,70 @@ function pintarAnio() {
 
 /* ---------- Animación de un día ---------- */
 
-const W = 960, H = 430, CAJA = 24, CELDA = 34, FILAS = 7, COLUMNAS = 12;
+const CAJA = 24, CARGA_VIAJE = 6, CAJA_CHICA = 18;
 const lienzo = $('lienzo'), ctx = lienzo.getContext('2d');
 const dpr = window.devicePixelRatio || 1;
-lienzo.width = W * dpr; lienzo.height = H * dpr;
-ctx.scale(dpr, dpr);
+const pantallaChica = matchMedia('(max-width: 700px)');
 
-const ZONA = { colaX: 520, colaY: 112, estX: 590, estW: 170, estY: 40, estH: 345, camionX: 812 };
-const posCola = (i) => {
-  const col = Math.min(COLUMNAS, Math.floor(i / FILAS));
-  return [ZONA.colaX - col * CELDA, ZONA.colaY + (i % FILAS) * CELDA];
+// Dos composiciones del mismo almacén. En pantalla ancha: cola → despachadores → andén, de izquierda a derecha.
+// En pantalla chica el lienzo se apila en vertical para que el texto siga legible al reducirlo al ancho del teléfono.
+const GEOMETRIAS = {
+  ancho: {
+    W: 960, H: 430,
+    reloj: { x: 18, y: 16, w: 132, h: 60, fuente: 44, textoX: 166, y1: 36, y2: 58, texto: 15 },
+    cola: { frenteX: 520, paso: 34, porFila: 14, filasY: [0, 40, -40, 80, -80], y0: 190, xMin: 28, xMax: 548 },
+    est: { x: 590, y: 40, w: 170, h: 345, cols: 1, sep: 0, altoMax: 46 },
+    franjas: [[566, 0, 8, 430], [784, 0, 8, 430]],
+    camion: { x: 812, y0: 62, paso: 110, esc: 1, enFila: false, dir: [1, 0], clip: [792, 0, 168, 430], texto: 13 },
+    etiquetas: [['Cola de pedidos', 20, 416], ['Despachadores', 590, 416], ['Andén de carga', 812, 416]],
+    losas: true, flecha: 202, texto: 13,
+  },
+  angosto: {
+    W: 420, H: 560,
+    reloj: { x: 12, y: 10, w: 112, h: 50, fuente: 36, textoX: 138, y1: 26, y2: 46, texto: 13 },
+    cola: { frenteX: 376, paso: 36, porFila: 9, filasY: [0, 40, 80], y0: 96, xMin: 32, xMax: 408 },
+    est: { x: 12, y: 262, w: 396, h: 150, cols: 2, sep: 10, altoMax: 40 },
+    franjas: [[0, 222, 420, 8], [0, 424, 420, 8]],
+    camion: { x: 12, y0: 490, paso: 102, esc: 0.62, enFila: true, dir: [0, 1], clip: [0, 434, 420, 126], texto: 12 },
+    etiquetas: [['Cola de pedidos', 12, 80], ['Despachadores', 12, 250], ['Andén de carga', 12, 456]],
+    losas: false, flecha: 108, texto: 13,
+  },
 };
-const altoEstacion = () => Math.min(46, ZONA.estH / dia.cap);
-const posEstacion = (k) => [ZONA.estX + ZONA.estW - CAJA - 10, ZONA.estY + k * altoEstacion() + (altoEstacion() - 6 - CAJA) / 2];
+let G = GEOMETRIAS.ancho;
+
+function configurarLienzo() {
+  G = pantallaChica.matches ? GEOMETRIAS.angosto : GEOMETRIAS.ancho;
+  lienzo.width = G.W * dpr; lienzo.height = G.H * dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+configurarLienzo();
+
+const capacidadCola = () => G.cola.porFila * G.cola.filasY.length;
+// Cada fila de la cola es una cinta que avanza hacia los despachadores; el primero en llegar queda junto a ellos
+const posCola = (i) => {
+  const c = G.cola, n = Math.min(i, capacidadCola() - 1);
+  return [c.frenteX - (n % c.porFila) * c.paso, c.y0 + c.filasY[Math.floor(n / c.porFila)]];
+};
+const tarjeta = (k) => {
+  const e = G.est, filas = Math.ceil(dia.cap / e.cols), alto = Math.min(e.altoMax, e.h / filas);
+  const w = (e.w - (e.cols - 1) * e.sep) / e.cols;
+  return { x: e.x + (k % e.cols) * (w + e.sep), y: e.y + Math.floor(k / e.cols) * alto, w, alto };
+};
+const posEstacion = (k) => {
+  const t = tarjeta(k);
+  return [t.x + t.w - CAJA - 10, t.y + (t.alto - 6 - CAJA) / 2];
+};
 // Cada camión lleva 6 cajas por viaje (3 × 2 en la tolva): al llenarse sale, se vacía y vuelve.
 // Es solo visual: la pérdida de ruta del modelo depende de la espera máxima T, no de estos viajes.
-const CARGA_VIAJE = 6, CAJA_CHICA = 18;
-const yCamion = (k) => 62 + k * 110;
-const posCarga = (k, i) => [ZONA.camionX + 12 + (i % 3) * 28 + dia.flota[k].dx, yCamion(k) + 18 + Math.floor(i / 3) * 22];
+const baseCamion = (k) => { const c = G.camion; return c.enFila ? [c.x + k * c.paso, c.y0] : [c.x, c.y0 + k * c.paso]; };
+const origenCamion = (k) => {
+  const [x, y] = baseCamion(k), d = dia.flota[k].d, [ux, uy] = G.camion.dir;
+  return [x + ux * d, y + uy * d];
+};
+const posCarga = (k, i) => {
+  const [ox, oy] = origenCamion(k), e = G.camion.esc;
+  return [ox + e * (12 + (i % 3) * 28), oy + e * (18 + Math.floor(i / 3) * 22)];
+};
 
 let dia = null, semillaDia = 1, reproduciendo = false, velocidad = 15, ultimoMs = null;
 const reducirMovimiento = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -311,7 +427,7 @@ function nuevoDia() {
   dia = {
     log, i: 0, t: 0, fin: log.length ? log[log.length - 1].t : 0, cap: Math.max(1, ...personal),
     pedidos: new Map(), cola: [], estaciones: Array.from({ length: Math.max(1, ...personal) }, () => ({ activa: true, pedido: null })),
-    flota: [0, 1, 2].map(() => ({ carga: 0, enCamino: 0, dx: 0, fase: 'anden', viajes: 0 })), faltaron: totalPersonas(estado.plan) - totalPersonas(presentes),
+    flota: [0, 1, 2].map(() => ({ carga: 0, enCamino: 0, d: 0, fase: 'anden', viajes: 0 })), faltaron: totalPersonas(estado.plan) - totalPersonas(presentes),
     cont: { llegados: 0, despachados: 0, perdieron: 0, cancelados: 0, espera: 0, nEspera: 0 },
     serie: { cola: [], turno: [] }, minuto: -1, servicios: log.filter((e) => e.tipo === 'inicio'),
   };
@@ -388,7 +504,7 @@ function mover(dt) {
       const cx = (x0 + x1) / 2, cy = Math.min(y0, y1) - 70;
       p.x = (1 - e) ** 2 * x0 + 2 * (1 - e) * e * cx + e ** 2 * x1;
       p.y = (1 - e) ** 2 * y0 + 2 * (1 - e) * e * cy + e ** 2 * y1;
-      p.escala = 1 - e * (1 - CAJA_CHICA / CAJA);
+      p.escala = 1 - e * (1 - (CAJA_CHICA * G.camion.esc) / CAJA);
       if (p.prog >= 1) {
         const c = dia.flota[p.camion];
         c.enCamino--; c.carga++;
@@ -406,19 +522,19 @@ function mover(dt) {
   moverCamiones(dt);
 }
 
-// El camión lleno arranca (acelera hacia la derecha), se vacía fuera de la vista y vuelve frenando al andén
+// El camión lleno arranca (acelera), se vacía fuera de la vista y vuelve frenando al andén
 function moverCamiones(dt) {
   for (const c of dia.flota) {
     if (c.fase === 'anden' && c.carga >= CARGA_VIAJE && c.enCamino === 0) {
       c.fase = 'saliendo'; c.vel = 0; c.viajes++;
     }
-    if (reducirMovimiento && c.fase !== 'anden') { c.fase = 'anden'; c.dx = 0; c.carga = Math.max(0, c.carga - CARGA_VIAJE); continue; }
+    if (reducirMovimiento && c.fase !== 'anden') { c.fase = 'anden'; c.d = 0; c.carga = Math.max(0, c.carga - CARGA_VIAJE); continue; }
     if (c.fase === 'saliendo') {
-      c.vel += 900 * dt; c.dx += c.vel * dt;
-      if (c.dx > 200) { c.fase = 'volviendo'; c.carga = Math.max(0, c.carga - CARGA_VIAJE); }   // lo que sobró espera el próximo viaje
+      c.vel += 900 * dt; c.d += c.vel * dt;
+      if (c.d > 200) { c.fase = 'volviendo'; c.carga = Math.max(0, c.carga - CARGA_VIAJE); }   // lo que sobró espera el próximo viaje
     } else if (c.fase === 'volviendo') {
-      c.dx *= Math.exp(-dt * 5);
-      if (c.dx < 0.5) { c.dx = 0; c.fase = 'anden'; }
+      c.d *= Math.exp(-dt * 5);
+      if (c.d < 0.5) { c.d = 0; c.fase = 'anden'; }
     }
   }
 }
@@ -466,50 +582,78 @@ function franjaSeguridad(x, y, w, h) {
   ctx.restore();
 }
 
+function dibujarCintas() {
+  const c = G.cola, filas = Math.max(1, Math.min(c.filasY.length, Math.ceil(dia.cola.length / c.porFila)));
+  for (let j = 0; j < filas; j++) {
+    const y = c.y0 + c.filasY[j] - 6;
+    ctx.globalAlpha = 0.5; rect(c.xMin, y, c.xMax - c.xMin, 38, 6); ctx.fillStyle = C.control; ctx.fill();
+    ctx.globalAlpha = 0.9; ctx.strokeStyle = C.control; ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    for (let x = c.xMin + 20; x < c.xMax - 12; x += 62) { ctx.moveTo(x, y + 13); ctx.lineTo(x + 6, y + 19); ctx.lineTo(x, y + 25); }
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+}
+
+function dibujarCamion(k) {
+  const [ox, oy] = origenCamion(k), e = G.camion.esc, c = dia.flota[k];
+  ctx.save();
+  ctx.translate(ox, oy); ctx.scale(e, e);
+  rect(0, 0, 104, 64, 4); ctx.fillStyle = C.fondo; ctx.fill();
+  ctx.strokeStyle = C.linea; ctx.lineWidth = 1.5; ctx.stroke();
+  rect(108, 18, 34, 46, 5); ctx.fillStyle = C.acero; ctx.fill();
+  ctx.fillStyle = C.fondo; ctx.fillRect(124, 24, 14, 14);
+  ctx.fillStyle = C.tinta;
+  for (const xr of [18, 84, 126]) { ctx.beginPath(); ctx.arc(xr, 68, 7, 0, 2 * Math.PI); ctx.fill(); }
+  if (c.fase !== 'volviendo') {
+    for (let i = 0; i < Math.min(c.carga, CARGA_VIAJE); i++) cajaDibujo(12 + (i % 3) * 28, 18 + Math.floor(i / 3) * 22, CAJA_CHICA, false);
+  }
+  ctx.restore();
+}
+
 function dibujar() {
-  ctx.clearRect(0, 0, W, H);
-  ctx.fillStyle = C.suelo; ctx.fillRect(0, 0, W, H);
-  // Juntas de las losas del piso de concreto
-  ctx.strokeStyle = C.linea; ctx.lineWidth = 1; ctx.beginPath();
-  for (let x = 140; x < 566; x += 140) { ctx.moveTo(x + 0.5, 0); ctx.lineTo(x + 0.5, H); }
-  for (let y = 140; y < H; y += 140) { ctx.moveTo(0, y + 0.5); ctx.lineTo(566, y + 0.5); }
-  ctx.stroke();
+  ctx.clearRect(0, 0, G.W, G.H);
+  ctx.fillStyle = C.suelo; ctx.fillRect(0, 0, G.W, G.H);
+  if (G.losas) {                                           // juntas de las losas del piso de concreto
+    ctx.strokeStyle = C.linea; ctx.lineWidth = 1; ctx.beginPath();
+    for (let x = 140; x < 566; x += 140) { ctx.moveTo(x + 0.5, 0); ctx.lineTo(x + 0.5, G.H); }
+    for (let y = 140; y < G.H; y += 140) { ctx.moveTo(0, y + 0.5); ctx.lineTo(566, y + 0.5); }
+    ctx.stroke();
+  }
+  dibujarCintas();
   // Entrada de pedidos: flecha pintada en el piso
   ctx.fillStyle = C.seguridad; ctx.beginPath();
-  ctx.moveTo(4, 212); ctx.lineTo(22, 224); ctx.lineTo(4, 236); ctx.closePath(); ctx.fill();
-  franjaSeguridad(566, 0, 8, H);
-  franjaSeguridad(784, 0, 8, H);
+  ctx.moveTo(4, G.flecha - 12); ctx.lineTo(22, G.flecha); ctx.lineTo(4, G.flecha + 12); ctx.closePath(); ctx.fill();
+  G.franjas.forEach((f) => franjaSeguridad(...f));
 
-  ctx.font = '500 13px Barlow, sans-serif'; ctx.fillStyle = C['tinta-2']; ctx.textBaseline = 'alphabetic';
-  ctx.fillText('Cola de pedidos', 20, H - 14);
-  ctx.fillText('Despachadores', ZONA.estX, H - 14);
-  ctx.fillText('Andén de carga', ZONA.camionX, H - 14);
+  ctx.font = `500 ${G.texto}px Barlow, sans-serif`; ctx.fillStyle = C['tinta-2']; ctx.textBaseline = 'alphabetic';
+  G.etiquetas.forEach(([texto, x, y]) => ctx.fillText(texto, x, y));
 
   // Reloj de pared
-  rect(18, 16, 132, 60, 6); ctx.fillStyle = C.tinta; ctx.fill();
-  ctx.fillStyle = C.fondo; ctx.font = '700 44px "Barlow Condensed", sans-serif'; ctx.textBaseline = 'middle';
-  ctx.fillText(reloj(dia.t), 30, 47);
+  const r = G.reloj;
+  rect(r.x, r.y, r.w, r.h, 6); ctx.fillStyle = C.tinta; ctx.fill();
+  ctx.fillStyle = C.fondo; ctx.font = `700 ${r.fuente}px "Barlow Condensed", sans-serif`; ctx.textBaseline = 'middle';
+  ctx.fillText(reloj(dia.t), r.x + 12, r.y + r.h / 2 + 1);
   const h = Math.min(9, Math.floor(dia.t / 60));
-  ctx.fillStyle = C.tinta; ctx.font = '500 15px Barlow, sans-serif';
-  ctx.fillText(dia.t >= 600 ? 'Horas extra: se despacha lo pendiente' : `Llegan ~${(S.LAMBDA[h] * (1 + estado.crec / 100)).toFixed(1)} pedidos por hora`, 166, 36);
+  ctx.fillStyle = C.tinta; ctx.font = `500 ${r.texto}px Barlow, sans-serif`;
+  ctx.fillText(dia.t >= 600 ? 'Horas extra: se despacha lo pendiente' : `Llegan ~${(S.LAMBDA[h] * (1 + estado.crec / 100)).toFixed(1)} pedidos por hora`, r.textoX, r.y1);
   ctx.fillStyle = C['tinta-2'];
-  ctx.fillText(`${dia.cola.length} en cola` + (dia.cola.length > FILAS * (COLUMNAS + 1) ? ' (no todos se ven)' : ''), 166, 58);
+  ctx.fillText(`${dia.cola.length} en cola` + (dia.cola.length > capacidadCola() ? ' (no todos se ven)' : ''), r.textoX, r.y2);
 
   // Despachadores
-  const ah = altoEstacion();
   dia.estaciones.forEach((e, k) => {
-    const y = ZONA.estY + k * ah;
-    rect(ZONA.estX, y, ZONA.estW, ah - 6, 4);
+    const t = tarjeta(k), ah = t.alto;
+    rect(t.x, t.y, t.w, ah - 6, 4);
     ctx.fillStyle = e.activa ? C.fondo : C.suelo; ctx.fill();
     // Puesto vacío: contorno punteado, como una marca en el piso
     ctx.setLineDash(e.activa ? [] : [4, 3]);
     ctx.strokeStyle = e.activa ? C.linea : C.control; ctx.lineWidth = 1; ctx.stroke();
     ctx.setLineDash([]);
-    const cy = y + (ah - 6) / 2, r = Math.min(8, (ah - 10) / 2);
-    ctx.beginPath(); ctx.arc(ZONA.estX + 14, cy, r, 0, 2 * Math.PI);
+    const cy = t.y + (ah - 6) / 2, rd = Math.min(8, (ah - 10) / 2);
+    ctx.beginPath(); ctx.arc(t.x + 14, cy, rd, 0, 2 * Math.PI);
     ctx.fillStyle = e.activa ? C.acero : C.linea; ctx.fill();
-    ctx.fillStyle = e.activa ? C.tinta : C['tinta-2']; ctx.font = `500 ${Math.min(14, ah - 10)}px Barlow, sans-serif`;
-    ctx.fillText(e.activa ? `D${k + 1}` : `D${k + 1} fuera de turno`, ZONA.estX + 28, cy);
+    ctx.fillStyle = e.activa ? C.tinta : C['tinta-2']; ctx.font = `500 ${Math.max(9, Math.min(14, ah - 10))}px Barlow, sans-serif`;
+    ctx.fillText(e.activa ? `D${k + 1}` : (G.est.cols > 1 ? `D${k + 1} fuera` : `D${k + 1} fuera de turno`), t.x + 28, cy);
     if (e.pedido !== null) {
       // Anillo de progreso alrededor de la caja que se está despachando
       const p = dia.pedidos.get(e.pedido);
@@ -525,27 +669,14 @@ function dibujar() {
 
   // Camiones: se llenan de a 6 cajas, salen y vuelven
   ctx.save();
-  ctx.beginPath(); ctx.rect(792, 0, W - 792, H); ctx.clip();
-  dia.flota.forEach((c, k) => {
-    const x = ZONA.camionX + c.dx, y = yCamion(k);
-    rect(x, y, 104, 64, 4); ctx.fillStyle = C.fondo; ctx.fill();
-    ctx.strokeStyle = C.linea; ctx.lineWidth = 1.5; ctx.stroke();
-    rect(x + 108, y + 18, 34, 46, 5); ctx.fillStyle = C.acero; ctx.fill();
-    ctx.fillStyle = C.fondo; ctx.fillRect(x + 124, y + 24, 14, 14);
-    ctx.fillStyle = C.tinta;
-    for (const xr of [x + 18, x + 84, x + 126]) { ctx.beginPath(); ctx.arc(xr, y + 68, 7, 0, 2 * Math.PI); ctx.fill(); }
-    if (c.fase !== 'volviendo') {
-      for (let i = 0; i < Math.min(c.carga, CARGA_VIAJE); i++) {
-        const [cx, cy] = posCarga(k, i);
-        cajaDibujo(cx, cy, CAJA_CHICA, false);
-      }
-    }
-  });
+  ctx.beginPath(); ctx.rect(...G.camion.clip); ctx.clip();
+  [0, 1, 2].forEach(dibujarCamion);
   ctx.restore();
-  ctx.fillStyle = C['tinta-2']; ctx.font = '500 13px Barlow, sans-serif'; ctx.textBaseline = 'alphabetic';
+  ctx.fillStyle = C['tinta-2']; ctx.font = `500 ${G.camion.texto}px Barlow, sans-serif`; ctx.textBaseline = 'alphabetic';
   dia.flota.forEach((c, k) => {
     const texto = c.fase === 'anden' ? `Camión ${k + 1}: ${Math.min(c.carga, CARGA_VIAJE)} de ${CARGA_VIAJE}` : `Camión ${k + 1}: en ruta`;
-    ctx.fillText(texto, ZONA.camionX, yCamion(k) - 8);
+    const [bx, by] = baseCamion(k);
+    ctx.fillText(texto, bx, by - 8);
   });
 
   for (const p of dia.pedidos.values()) dibujarCaja(p);
@@ -586,6 +717,7 @@ $('play').addEventListener('click', () => {
 $('reiniciar').addEventListener('click', () => nuevoDia());
 $('otroDia').addEventListener('click', () => { semillaDia++; nuevoDia(); ponerReproduccion(true); });
 $('velocidad').addEventListener('change', (e) => { velocidad = Number(e.target.value); });
+pantallaChica.addEventListener('change', () => { configurarLienzo(); nuevoDia(); });
 
 // Una frase que cuenta en palabras lo que se ve en el almacén
 function narrar() {
@@ -622,13 +754,16 @@ function cuadro(ms) {
 /* ---------- Inicio ---------- */
 
 leerColores();
+pintarBotonTema();
 sincronizarDeslizadores();
 crearGraficos();
 cambioPlan();
 if (!window.Chart) {
-  document.querySelectorAll('.grafico').forEach((g) => { g.innerHTML = '<p>Los gráficos necesitan conexión a internet (Chart.js).</p>'; g.style.height = 'auto'; });
+  document.querySelectorAll('.grafico').forEach((g) => { g.innerHTML = '<p>No se pudo cargar Chart.js (vendor/chart.umd.js).</p>'; g.style.height = 'auto'; });
 }
-matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { leerColores(); crearGraficos(); });
+// En el teléfono los controles arrancan plegados para que los resultados queden a la vista
+if (matchMedia('(max-width: 860px)').matches) document.querySelectorAll('.lateral details').forEach((d) => { d.open = false; });
 document.fonts.ready.then(crearGraficos);   // redibuja los gráficos con la tipografía ya cargada
+setTimeout(() => { base = evaluarActual({ crecimiento: 0, ausentismo: 0, T: S.T_CAL, p: S.P_CAL, margen: 1, costoHoraExtra: INICIAL.hx }); pintarBase(); }, 0);
 if (!reducirMovimiento) ponerReproduccion(true);
 requestAnimationFrame(cuadro);

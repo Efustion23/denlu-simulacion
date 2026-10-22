@@ -1,11 +1,14 @@
 // Modelo de simulación de eventos discretos del andén de DENLU.
-// Es el mismo modelo de Denlu_Simulacion.ipynb (SimPy), reescrito en JavaScript para el navegador.
+// Es el mismo modelo de Denlu.ipynb (Parte II) (SimPy), reescrito en JavaScript para el navegador.
 
 const MU_MIN = 44.5;                       // tiempo medio de despacho (min), exponencial
 const MU_H = 60 / MU_MIN;
 const DIAS = 299;                          // días operativos por año
 const HORAS = [8, 9, 10, 11, 12, 13, 14, 15, 16, 17];
 const LAMBDA = [1.599, 6.742, 6.268, 3.064, 1.324, 1.836, 2.786, 1.505, 1.107, 0.565];
+// Observado en 2025 con 3 despachadores, por hora de llegada (diagnóstico de Denlu.ipynb)
+const HIST_ESPERA = [4.54, 40.77, 39.46, 4.62, 4.85, 4.55, 4.75, 4.40, 4.53, 4.77];   // min
+const HIST_PERDIDA = [0, 75.15, 74.81, 0, 0, 0, 0, 0, 0, 0];                            // % de pedidos que pierden la ruta
 const TICKET = 620042.58 / 801;            // venta perdida 2025 / pedidos cancelados 2025
 const C_FT = 1373.50, C_PT = 686.76;       // costo mensual por trabajador (S/)
 const COSTO_HORA_EXTRA = (1025 / 240) * 1.25;   // hora simple del sueldo base + 25 % (D.S. 007-2002-TR)
@@ -202,7 +205,7 @@ function evaluar(plan, escenario = {}) {
 }
 
 const Simulacion = {
-  MU_MIN, MU_H, DIAS, HORAS, LAMBDA, TICKET, C_FT, C_PT, COSTO_HORA_EXTRA, CIERRE, T_CAL, P_CAL, TURNOS, PLANES,
+  MU_MIN, MU_H, DIAS, HORAS, LAMBDA, HIST_ESPERA, HIST_PERDIDA, TICKET, C_FT, C_PT, COSTO_HORA_EXTRA, CIERRE, T_CAL, P_CAL, TURNOS, PLANES,
   crearRng, costoMensual, personalPorHora, requeridos, simularDia, presentesDelDia, simularAnio, evaluar,
 };
 if (typeof module !== 'undefined') module.exports = Simulacion;
