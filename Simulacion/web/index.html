@@ -5,91 +5,119 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Andén DENLU</title>
   <meta name="description" content="Optimización de personal en el almacén de DENLU (Tarma): diagnóstico con colas, plan MILP, cobertura y ROI, con una animación de un día de despacho.">
-  <script>try { var t = localStorage.getItem('denlu-tema'); if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; } catch (e) {}</script>
+  <script>document.documentElement.classList.add("js"); try { var t = localStorage.getItem('denlu-tema'); if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; } catch (e) {}</script>
   <link rel="stylesheet" href="estilos.css">
 </head>
 <body>
-  <div class="marco">
-    <aside class="lateral" aria-label="Plan que se anima">
-      <div class="marca">
+  <header class="barra">
+    <a class="marca" href="#inicio" aria-label="DENLU, almacén de Tarma: volver al inicio">
         <svg viewBox="0 0 32 32" width="32" height="32" aria-hidden="true">
           <rect x="3" y="8" width="26" height="20" rx="2" fill="var(--carton)"/>
           <rect x="3" y="8" width="26" height="6" rx="2" fill="var(--carton-borde)"/>
           <rect x="13.5" y="8" width="5" height="20" fill="var(--seguridad)"/>
         </svg>
-        <div>
-          <p class="marca-nombre">DENLU</p>
-          <p class="marca-ambito">Almacén de Tarma</p>
-        </div>
-        <button type="button" class="tema" id="tema" aria-pressed="false" aria-label="Tema oscuro" title="Cambiar entre tema claro y oscuro">
+      <span><span class="marca-nombre">DENLU</span><span class="marca-ambito">Almacén de Tarma</span></span>
+    </a>
+    <nav class="pasos" aria-label="Secciones">
+      <a href="#diagnostico"><span class="num">1</span><span class="txt">Diagnóstico</span></a>
+      <a href="#plan"><span class="num">2</span><span class="txt">Plan</span></a>
+      <a href="#roi"><span class="num">3</span><span class="txt">ROI</span></a>
+      <a href="#dia"><span class="num">4</span><span class="txt">Un día</span></a>
+    </nav>
+    <button type="button" class="tema" id="tema" aria-pressed="false" aria-label="Tema oscuro" title="Cambiar entre tema claro y oscuro">
           <svg class="luna" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
           <svg class="sol" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><circle cx="12" cy="12" r="4" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
         </button>
-      </div>
+  </header>
 
-      <section aria-labelledby="tPlan">
-        <h2 id="tPlan">Plan que se anima</h2>
-        <div class="presets" id="presets" role="group" aria-label="Plan de personal"></div>
-        <p class="costo"><span id="costoMes"></span> al mes <span class="costo-gente" id="totalPersonas"></span></p>
-        <details class="plegable plegable-menor" open>
-          <summary>Turnos y cobertura</summary>
-          <p class="eje-turnos" aria-hidden="true"><span>8h</span><span>18h</span></p>
-          <table class="turnos" id="turnos"></table>
-          <div class="grafico grafico-cobertura"><canvas id="gPersonal" aria-label="Despachadores por hora del plan elegido frente al mínimo requerido"></canvas></div>
-        </details>
-      </section>
-    </aside>
-
-    <main class="hoja">
-      <header class="titulo">
-        <div>
-          <h1>Andén de despacho</h1>
-          <p class="hallazgo">Con 3 despachadores fijos, a las 9 y 10 h la utilización supera 1.5 y tres de cada cuatro pedidos pierden su ruta. El plan del MILP cubre esas horas por <strong>S/ 6,867.52</strong> al mes.</p>
-        </div>
-        <p class="plan-elegido">Fuente: <a href="https://github.com/Efustion23/denlu-simulacion/blob/main/Simulacion/Denlu.ipynb">Denlu.ipynb</a></p>
-      </header>
-
+  <main class="hoja" id="inicio">
+    <section class="portada revelar" aria-labelledby="tTitulo">
+      <p class="antetitulo">Investigación de Operaciones 1 · Teoría de colas y programación entera</p>
+      <h1 id="tTitulo">¿Cuántos despachadores necesita el almacén de DENLU, y en qué horario?</h1>
+      <p class="hallazgo">Con 3 despachadores fijos, a las 9 y 10 h llegan más pedidos de los que se pueden atender: tres de cada cuatro pierden su ruta. Un plan de turnos optimizado cubre esas horas por <strong>S/ 6,867.52</strong> al mes y se paga muchas veces con las ventas que recupera.</p>
       <dl class="kpis" id="kpis" aria-label="Resultados principales de Denlu.ipynb"></dl>
+      <p class="fuente">Todas las cifras salen del notebook <a href="https://github.com/Efustion23/denlu-simulacion/blob/main/Simulacion/Denlu.ipynb">Denlu.ipynb</a>.</p>
+    </section>
 
-      <section class="bloque" aria-labelledby="tDiag">
-        <div class="bloque-cab">
-          <h2 id="tDiag">1. Diagnóstico de la situación actual</h2>
-          <span class="estado">3 despachadores, 8 012 pedidos, 299 días</span>
+    <section class="bloque paso-seccion revelar" id="diagnostico" aria-labelledby="tDiag">
+      <div class="bloque-cab">
+        <h2 id="tDiag"><span class="num">1</span>Diagnóstico: ¿dónde se satura el almacén?</h2>
+        <span class="estado">3 despachadores · 8 012 pedidos · 299 días</span>
+      </div>
+      <p class="nota-bloque">Cada despachador prepara un pedido en 44.5 min en promedio, así que los 3 juntos atienden unos <strong>4.0 pedidos por hora</strong>. Elige una hora para comparar lo que llega con lo que se puede atender.</p>
+      <div class="horas" id="horas" role="tablist" aria-label="Hora del día"></div>
+      <div class="explorador">
+        <div class="balanza">
+          <div class="fila-balanza"><span class="et">Llegan</span><div class="pista"><i id="barraLlegan"></i></div><strong id="vLlegan"></strong></div>
+          <div class="fila-balanza"><span class="et">Pueden atender</span><div class="pista"><i id="barraCap" class="cap"></i></div><strong id="vCap"></strong></div>
+          <p class="veredicto" id="veredicto" aria-live="polite"></p>
+          <div class="datos-hora">
+            <div><span>Espera media</span><strong id="vEspera"></strong></div>
+            <div><span>Pierden su ruta</span><strong id="vPerdida"></strong></div>
+          </div>
+          <button type="button" class="enlace" id="recorrer">▶ Recorrer el día hora por hora</button>
         </div>
-        <p class="nota-bloque">Teoría de colas M/M/c con μ = 44.5 min por pedido. A las 9 y 10 h la utilización supera 1 (en rojo): la cola crece sin límite y tres de cada cuatro pedidos pierden su ruta. El resto del día queda por debajo del objetivo de 0.85 (línea punteada).</p>
-        <div class="dos-col">
-          <table class="resultados" id="tablaDiag"></table>
-          <div class="grafico grafico-medio"><canvas id="gRho" aria-label="Utilización por hora con 3 despachadores"></canvas></div>
-        </div>
-      </section>
+        <figure class="medidor" aria-label="Utilización de la hora elegida">
+          <svg viewBox="0 0 200 120" aria-hidden="true">
+            <path class="arco-fondo" d="M20 100 A80 80 0 0 1 180 100" />
+            <path class="arco-valor" id="arcoRho" d="M20 100 A80 80 0 0 1 180 100" />
+            <line class="marca-085" x1="0" y1="0" x2="0" y2="0" id="marca085" />
+            <line class="aguja" id="aguja" x1="100" y1="100" x2="100" y2="30" />
+            <circle cx="100" cy="100" r="5" class="eje" />
+          </svg>
+          <figcaption><span class="rho-valor" id="vRho"></span><span class="rho-et">utilización ρ · objetivo 0.85 · desde 1 la cola crece sin límite</span></figcaption>
+        </figure>
+      </div>
+      <div class="grafico grafico-medio"><canvas id="gRho" aria-label="Utilización por hora con 3 despachadores"></canvas></div>
+      <details class="detalle">
+        <summary>Ver la tabla completa del diagnóstico</summary>
+        <table class="resultados" id="tablaDiag"></table>
+      </details>
+    </section>
 
-      <section class="bloque" aria-labelledby="tMilp">
-        <div class="bloque-cab">
-          <h2 id="tMilp">2. Plan óptimo de turnos (MILP)</h2>
-          <span class="estado">ρ ≤ 0.85 en cada hora, part-time ≤ 40 % (D.S. 003-97-TR)</span>
-        </div>
-        <p class="nota-bloque">El mínimo de despachadores por hora es D<sub>h</sub> = máx(1, ⌈λ<sub>h</sub> / (0.85 μ)⌉). El modelo de programación entera elige cuántas personas entran en cada turno (tres de tiempo completo con almuerzo y tres de medio tiempo) al menor costo de planilla.</p>
-        <p class="plan-milp" id="planMilp"></p>
-        <div class="dos-col">
-          <table class="resultados" id="tablaCobertura"></table>
-          <div class="grafico grafico-medio"><canvas id="gCobertura" aria-label="Despachadores requeridos y asignados por hora"></canvas></div>
-        </div>
-      </section>
+    <section class="bloque paso-seccion revelar" id="plan" aria-labelledby="tMilp">
+      <div class="bloque-cab">
+        <h2 id="tMilp"><span class="num">2</span>Plan: turnos que cubren cada hora</h2>
+        <span class="estado">ρ ≤ 0.85 · part-time ≤ 40 % (D.S. 003-97-TR)</span>
+      </div>
+      <p class="nota-bloque">Para que ninguna hora pase de ρ = 0.85 se necesitan D<sub>h</sub> = máx(1, ⌈λ<sub>h</sub> / (0.85 μ)⌉) despachadores. El modelo de programación entera elige cuántas personas entran en cada turno al menor costo de planilla. Compara el horario de hoy con el del plan.</p>
+      <div class="segmentado" id="vistaGantt" role="group" aria-label="Horario a mostrar">
+        <button type="button" data-vista="actual">Hoy: 3 fijos</button>
+        <button type="button" data-vista="milp" aria-pressed="true">Plan MILP</button>
+      </div>
+      <div class="gantt" id="gantt" aria-label="Horario por persona y cobertura por hora"></div>
+      <p class="plan-milp" id="planMilp"></p>
+      <div class="grafico grafico-medio"><canvas id="gCobertura" aria-label="Despachadores requeridos y asignados por hora"></canvas></div>
+      <details class="detalle">
+        <summary>Ver la tabla de cobertura</summary>
+        <table class="resultados" id="tablaCobertura"></table>
+      </details>
+    </section>
 
-      <section class="bloque" aria-labelledby="tRoi">
-        <div class="bloque-cab">
-          <h2 id="tRoi">3. Retorno de la inversión</h2>
-          <span class="estado">supuesto: el plan recupera el 95 % de la venta perdida</span>
-        </div>
+    <section class="bloque paso-seccion revelar" id="roi" aria-labelledby="tRoi">
+      <div class="bloque-cab">
+        <h2 id="tRoi"><span class="num">3</span>¿Vale la pena? Retorno de la inversión</h2>
+        <span class="estado">supuesto: el plan recupera el 95 % de la venta perdida</span>
+      </div>
+      <p class="nota-bloque">Hoy se pierden <strong>S/ 620,042.58</strong> al año por pedidos cancelados. Si el plan recupera el 95 % de esas ventas y cuesta S/ 32,964.24 más de planilla, queda este beneficio:</p>
+      <div class="cascada" id="cascada" aria-label="De la venta perdida al beneficio neto"></div>
+      <p class="roi-final">Retorno de la inversión: <strong id="vRoi">0 %</strong></p>
+      <details class="detalle">
+        <summary>Ver el cálculo completo</summary>
         <table class="resultados resultados-roi" id="tablaRoi"></table>
-      </section>
+      </details>
+    </section>
 
-      <section class="bloque" aria-labelledby="tDia">
+      <section class="bloque paso-seccion revelar" id="dia" aria-labelledby="tDia">
         <div class="bloque-cab">
-          <h2 id="tDia">4. Un día en el almacén</h2>
+          <h2 id="tDia"><span class="num">4</span>Un día en el almacén</h2>
           <span class="estado" id="estadoDia" aria-live="polite"></span>
         </div>
-        <p class="nota-bloque">Ilustración, no forma parte de <code>Denlu.ipynb</code>: un día simulado pedido por pedido con las tasas λ por hora del diagnóstico y μ = 44.5 min. Elige en la barra lateral si lo atiende la situación actual o el plan MILP. Como supuesto de la animación, un pedido que espera más de 20 min pierde su ruta y, a veces, el cliente cancela.</p>
+        <p class="nota-bloque">Mira cómo se forma la cola con cada plan. Es una ilustración que no forma parte de <code>Denlu.ipynb</code>: un día simulado pedido por pedido con las tasas λ por hora del diagnóstico y μ = 44.5 min. Supone que un pedido que espera más de 20 min pierde su ruta y, a veces, el cliente cancela.</p>
+        <div class="selector-plan">
+          <div class="segmentado" id="presets" role="group" aria-label="Quién atiende el día"></div>
+          <p class="costo"><span id="costoMes"></span> al mes <span class="costo-gente" id="totalPersonas"></span></p>
+        </div>
         <p class="narracion" id="narracion"></p>
         <div class="lienzo"><canvas id="lienzo" role="img" aria-label="Vista del almacén: cola de pedidos, despachadores y andén de carga"></canvas></div>
         <ul class="leyenda" aria-label="Qué significa cada cosa">
@@ -116,13 +144,12 @@
         <div class="grafico grafico-dia"><canvas id="gDia" aria-label="Pedidos en cola y despachadores en turno durante el día"></canvas></div>
       </section>
 
-      <footer class="pie-pagina">
-        <span>Diagnóstico, MILP y ROI del notebook <a href="https://github.com/Efustion23/denlu-simulacion/blob/main/Simulacion/Denlu.ipynb">Denlu.ipynb</a></span>
-        <a href="https://colab.research.google.com/github/Efustion23/denlu-simulacion/blob/main/Simulacion/Denlu.ipynb">Abrir en Colab</a>
-        <a href="https://github.com/Efustion23/denlu-simulacion">Código</a>
-      </footer>
-    </main>
-  </div>
+    <footer class="pie-pagina">
+      <span>Diagnóstico, MILP y ROI del notebook <a href="https://github.com/Efustion23/denlu-simulacion/blob/main/Simulacion/Denlu.ipynb">Denlu.ipynb</a></span>
+      <a href="https://colab.research.google.com/github/Efustion23/denlu-simulacion/blob/main/Simulacion/Denlu.ipynb">Abrir en Colab</a>
+      <a href="https://github.com/Efustion23/denlu-simulacion">Código</a>
+    </footer>
+  </main>
 
   <script src="vendor/chart.umd.js"></script>
   <script src="simulacion.js"></script>
