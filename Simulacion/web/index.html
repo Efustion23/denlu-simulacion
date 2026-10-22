@@ -4,9 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Andén DENLU</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@600;700&display=swap" rel="stylesheet">
+  <meta name="description" content="Simulador del almacén de DENLU (Tarma): un día de despacho animado y la comparación de un año completo contra la situación actual.">
+  <script>try { var t = localStorage.getItem('denlu-tema'); if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; } catch (e) {}</script>
   <link rel="stylesheet" href="estilos.css">
 </head>
 <body>
@@ -22,20 +21,27 @@
           <p class="marca-nombre">DENLU</p>
           <p class="marca-ambito">Almacén de Tarma</p>
         </div>
+        <button type="button" class="tema" id="tema" aria-pressed="false" aria-label="Tema oscuro" title="Cambiar entre tema claro y oscuro">
+          <svg class="luna" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
+          <svg class="sol" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><circle cx="12" cy="12" r="4" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        </button>
       </div>
 
       <section aria-labelledby="tPersonal">
         <h2 id="tPersonal">Personal</h2>
         <div class="presets" id="presets" role="group" aria-label="Planes guardados"></div>
-        <p class="eje-turnos" aria-hidden="true"><span>8h</span><span>18h</span></p>
-        <table class="turnos" id="turnos"></table>
-        <p class="costo"><span id="costoMes"></span> al mes</p>
+        <p class="costo"><span id="costoMes"></span> al mes <span class="costo-gente" id="totalPersonas"></span></p>
         <p class="aviso" id="avisoPT" hidden>El part-time supera el 40 % del personal que permite el D.S. 003-97-TR.</p>
-        <div class="grafico grafico-cobertura"><canvas id="gCobertura" aria-label="Despachadores por hora frente al mínimo requerido"></canvas></div>
+        <details class="plegable plegable-menor" id="detTurnos" open>
+          <summary>Turnos y cobertura</summary>
+          <p class="eje-turnos" aria-hidden="true"><span>8h</span><span>18h</span></p>
+          <table class="turnos" id="turnos"></table>
+          <div class="grafico grafico-cobertura"><canvas id="gCobertura" aria-label="Despachadores por hora frente al mínimo requerido"></canvas></div>
+        </details>
       </section>
 
-      <section aria-labelledby="tEscenario">
-        <h2 id="tEscenario">Escenario</h2>
+      <details class="plegable" id="detEscenario" open>
+        <summary><h2 id="tEscenario">Escenario</h2></summary>
         <label class="control">
           <span>Crecimiento de la demanda <output id="vCrec"></output></span>
           <input type="range" id="crec" min="0" max="60" step="5" value="0">
@@ -52,10 +58,10 @@
           <span>Probabilidad de cancelar tras perderla <output id="vP"></output></span>
           <input type="range" id="p" min="0" max="1" step="0.01" value="0.28">
         </label>
-      </section>
+      </details>
 
-      <section aria-labelledby="tValoracion">
-        <h2 id="tValoracion">Valoración</h2>
+      <details class="plegable" id="detValoracion" open>
+        <summary><h2 id="tValoracion">Valoración</h2></summary>
         <label class="control">
           <span>Margen bruto de un pedido <output id="vMargen"></output></span>
           <input type="range" id="margen" min="5" max="100" step="5" value="100">
@@ -66,7 +72,7 @@
         </label>
         <p class="nota">Con 100 % la venta perdida se cuenta a precio de venta, como en el notebook. Solo se pagan como extra las horas después del cierre de las 18:00.</p>
         <button type="button" class="enlace" id="restaurar">Volver a los valores iniciales</button>
-      </section>
+      </details>
     </aside>
 
     <main class="hoja">
@@ -79,13 +85,17 @@
       </header>
 
       <ol class="guia" aria-label="Cómo usar el simulador">
-        <li><strong>Elige el personal</strong> a la izquierda: cuántos despachadores entran en cada turno.</li>
-        <li><strong>Mira un día</strong> en el almacén: los pedidos llegan, esperan y se cargan en los camiones.</li>
-        <li><strong>Compara el año</strong> con la situación actual: cancelaciones, esperas y costos.</li>
+        <li><strong>Elige el personal</strong> Cuántos despachadores entran en cada turno.</li>
+        <li><strong>Mira un día</strong> Los pedidos llegan, esperan y salen en camión.</li>
+        <li><strong>Compara el año</strong> Cancelaciones, esperas y costos frente a hoy.</li>
       </ol>
 
       <dl class="kpis" id="kpis" aria-label="Resumen del año simulado"></dl>
-      <p class="ayuda" id="ayuda"></p>
+      <div class="alerta" id="alerta" role="note" hidden></div>
+      <details class="como">
+        <summary>Cómo leer los resultados</summary>
+        <p id="ayuda"></p>
+      </details>
 
       <section class="bloque" aria-labelledby="tDia">
         <div class="bloque-cab">
@@ -95,11 +105,11 @@
         <p class="narracion" id="narracion"></p>
         <div class="lienzo"><canvas id="lienzo" role="img" aria-label="Vista del almacén: cola de pedidos, despachadores y andén de carga"></canvas></div>
         <ul class="leyenda" aria-label="Qué significa cada cosa">
-          <li><span class="sw sw-caja"></span>Pedido esperando (la barra amarilla es su espera)</li>
-          <li><span class="sw sw-perdio"></span>Esperó más de <span id="leyendaT">20</span> min y perdió su camión</li>
-          <li><span class="sw sw-cancelo"></span>El cliente canceló</li>
-          <li><span class="sw sw-desp"></span>Despachador trabajando</li>
-          <li><span class="sw sw-fuera"></span>Puesto vacío (almuerzo o fuera de turno)</li>
+          <li><span class="sw sw-caja"></span><span>Pedido esperando (la barra amarilla es su espera)</span></li>
+          <li><span class="sw sw-perdio"></span><span>Esperó más de <strong id="leyendaT">20</strong> min y perdió su camión</span></li>
+          <li><span class="sw sw-cancelo"></span><span>El cliente canceló</span></li>
+          <li><span class="sw sw-desp"></span><span>Despachador trabajando</span></li>
+          <li><span class="sw sw-fuera"></span><span>Puesto vacío (almuerzo o fuera de turno)</span></li>
         </ul>
         <div class="reproductor">
           <button type="button" id="play" class="primario">Reproducir</button>
@@ -130,10 +140,29 @@
           <div class="grafico"><canvas id="gPerdida" aria-label="Pérdida de ruta por hora de llegada"></canvas></div>
         </div>
       </section>
+
+      <section class="bloque" aria-labelledby="tBase">
+        <div class="bloque-cab">
+          <h2 id="tBase">Punto de partida: 2025</h2>
+          <span class="estado">3 despachadores fijos, 8 012 pedidos</span>
+        </div>
+        <p class="nota-bloque">El modelo parte del diagnóstico de 2025 y se calibró para reproducir sus totales: 36 % de pedidos pierden su ruta y 10 % se cancelan. A las 9 y 10 h la utilización supera 1: la cola crece sin límite (barras rojas). Hora por hora el ajuste es parcial: la simulación arrastra la cola del pico hasta el mediodía, y el histórico no.</p>
+        <div class="graficos-base">
+          <div class="grafico"><canvas id="gRho" aria-label="Utilización de los 3 despachadores actuales por hora"></canvas></div>
+          <div class="grafico"><canvas id="gValEspera" aria-label="Espera por hora: histórico 2025 frente a simulada"></canvas></div>
+          <div class="grafico"><canvas id="gValPerdida" aria-label="Pérdida de ruta por hora: histórico 2025 frente a simulada"></canvas></div>
+        </div>
+      </section>
+
+      <footer class="pie-pagina">
+        <span>Modelo y datos en el notebook <a href="https://github.com/Efustion23/denlu-simulacion/blob/main/Simulacion/Denlu.ipynb">Denlu.ipynb</a></span>
+        <a href="https://colab.research.google.com/github/Efustion23/denlu-simulacion/blob/main/Simulacion/Denlu.ipynb">Abrir en Colab</a>
+        <a href="https://github.com/Efustion23/denlu-simulacion">Código</a>
+      </footer>
     </main>
   </div>
 
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <script src="vendor/chart.umd.js"></script>
   <script src="simulacion.js"></script>
   <script src="app.js"></script>
 </body>

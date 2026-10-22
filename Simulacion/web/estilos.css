@@ -2,6 +2,12 @@
    sobre una hoja blanca con borde de 1px, sin sombras. El color va en los datos: el azul acero del
    uniforme de los despachadores marca el plan elegido; la situación actual va en gris.
    Rejilla: hoja = viewport − 288px (lateral) − 8px de margen; 24px de relleno y un solo espacio de 24px. */
+@font-face { font-family: "Barlow"; font-style: normal; font-weight: 400; font-display: swap; src: url("fonts/barlow-latin-400-normal.woff2") format("woff2"); }
+@font-face { font-family: "Barlow"; font-style: normal; font-weight: 500; font-display: swap; src: url("fonts/barlow-latin-500-normal.woff2") format("woff2"); }
+@font-face { font-family: "Barlow"; font-style: normal; font-weight: 600; font-display: swap; src: url("fonts/barlow-latin-600-normal.woff2") format("woff2"); }
+@font-face { font-family: "Barlow Condensed"; font-style: normal; font-weight: 600; font-display: swap; src: url("fonts/barlow-condensed-latin-600-normal.woff2") format("woff2"); }
+@font-face { font-family: "Barlow Condensed"; font-style: normal; font-weight: 700; font-display: swap; src: url("fonts/barlow-condensed-latin-700-normal.woff2") format("woff2"); }
+
 :root {
   color-scheme: light;
   --marco: #eceeea;
@@ -98,6 +104,7 @@ h1, h2, p { margin: 0; }
 h1 { font-size: 24px; font-weight: 600; line-height: 1.2; letter-spacing: -0.01em; }
 h2 { font-size: 16px; font-weight: 600; line-height: 1.3; }
 button, select, input { font: inherit; color: inherit; }
+a { color: var(--acero); text-underline-offset: 3px; }
 :focus-visible { outline: 2px solid var(--acero); outline-offset: 2px; border-radius: 2px; }
 
 /* Marco: lateral teñida + hoja blanca */
@@ -121,8 +128,32 @@ button, select, input { font: inherit; color: inherit; }
 .marca svg { flex: none; }
 .marca-nombre { font-weight: 600; font-size: 15px; line-height: 1.2; }
 .marca-ambito { color: var(--tinta-2); font-size: 13px; line-height: 1.2; }
-.lateral section + section { margin-top: 28px; }
+.tema {
+  margin-left: auto; flex: none; width: 32px; height: 32px; padding: 0;
+  display: grid; place-items: center; cursor: pointer;
+  border: 1px solid var(--control); background: var(--boton); border-radius: var(--radio); color: var(--tinta-2);
+  transition: background-color 150ms var(--curva), color 150ms var(--curva);
+}
+.tema:hover { background: var(--activo); color: var(--tinta); }
+.tema .sol, .tema[aria-pressed="true"] .luna { display: none; }
+.tema[aria-pressed="true"] .sol { display: block; }
+
+.lateral > section, .lateral > details { margin-top: 28px; }
 .lateral h2 { margin-bottom: 12px; }
+
+/* Secciones plegables de la barra lateral (en móvil arrancan cerradas) */
+.plegable > summary { display: flex; align-items: center; justify-content: space-between; gap: 8px; cursor: pointer; list-style: none; }
+.plegable > summary::-webkit-details-marker { display: none; }
+.plegable > summary::after {
+  content: ""; flex: none; width: 7px; height: 7px; margin: 0 3px 3px 0;
+  border: solid var(--tinta-2); border-width: 0 1.5px 1.5px 0; transform: rotate(45deg);
+  transition: transform 150ms var(--curva);
+}
+.plegable[open] > summary::after { transform: rotate(-135deg); margin-bottom: -2px; }
+.plegable > summary h2 { margin: 0; }
+.plegable[open] > summary { margin-bottom: 12px; }
+.plegable-menor > summary { color: var(--tinta-2); font-weight: 500; }
+.plegable-menor[open] > summary { margin-bottom: 6px; }
 
 /* Botones: una forma, un radio */
 .presets { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
@@ -140,8 +171,9 @@ button, select, input { font: inherit; color: inherit; }
 .turnos td { padding: 6px 0; border-bottom: 1px solid var(--linea); vertical-align: middle; }
 .turnos .nombre { display: block; font-weight: 600; line-height: 1.25; }
 .turnos .horario { display: block; color: var(--tinta-2); font-size: 13px; line-height: 1.3; }
+.turnos .separador td { padding: 14px 0 2px; border-bottom: 0; color: var(--tinta-2); font-size: 11px; font-weight: 500; letter-spacing: 0.05em; text-transform: uppercase; }
 /* Horario dibujado del turno: 10 celdas de 8 a 18 h */
-.eje-turnos { display: flex; justify-content: space-between; width: 130px; margin: 0 0 -2px; font-size: 11px; color: var(--tinta-2); }
+.eje-turnos { display: flex; justify-content: space-between; width: 128px; margin: 0 0 -2px; font-size: 11px; color: var(--tinta-2); }
 .tira { display: flex; gap: 2px; margin: 4px 0 3px; }
 .tira i { width: 11px; height: 8px; border-radius: 2px; background: var(--activo); }
 .tira i.on { background: var(--acero); }
@@ -150,8 +182,10 @@ button, select, input { font: inherit; color: inherit; }
 .paso button { width: 28px; height: 28px; padding: 0; line-height: 1; }
 .paso output { width: 1.6rem; text-align: center; font-weight: 600; }
 .costo { margin-top: 12px; color: var(--tinta-2); }
-.costo span { font-size: 20px; font-weight: 600; color: var(--tinta); }
+.costo span:first-child { font-size: 20px; font-weight: 600; color: var(--tinta); }
+.costo-gente::before { content: "· "; }
 .aviso { margin-top: 6px; color: var(--rojo); font-weight: 500; }
+.plegable-menor { margin-top: 14px; }
 .grafico { position: relative; }
 .grafico-cobertura { height: 168px; margin-top: 12px; }
 
@@ -178,12 +212,11 @@ button, select, input { font: inherit; color: inherit; }
   width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center;
   background: var(--seguridad); color: #141617; font-weight: 600; font-size: 13px;
 }
-.ayuda { margin: -12px 0 var(--espacio); color: var(--tinta-2); font-size: 13px; max-width: 95ch; }
 
 /* KPIs: un contenedor dividido por líneas de 1px */
 .kpis {
   display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
-  margin: 0 0 var(--espacio); border: 1px solid var(--linea); border-radius: 8px;
+  margin: 0 0 16px; border: 1px solid var(--linea); border-radius: 8px;
   transition: opacity 150ms var(--curva);
 }
 .kpis[aria-busy="true"], .resultados[aria-busy="true"] { opacity: 0.55; }
@@ -196,14 +229,27 @@ button, select, input { font: inherit; color: inherit; }
 .kpis .bien { color: var(--verde); }
 .kpis .mal { color: var(--rojo); }
 
+/* Aviso de la hora más débil y explicación plegable */
+.alerta {
+  margin: 0 0 16px; padding: 12px 16px; max-width: 95ch;
+  border: 1px solid var(--linea); border-left: 3px solid var(--rojo); border-radius: 8px; background: var(--panel);
+  line-height: 1.45;
+}
+.alerta strong { display: block; font-weight: 600; }
+.como { margin: 0 0 var(--espacio); color: var(--tinta-2); font-size: 13px; max-width: 95ch; }
+.como summary { width: max-content; cursor: pointer; }
+.como p { margin-top: 6px; }
+
 .bloque + .bloque { margin-top: 40px; }
 .bloque-cab { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-bottom: 12px; }
 .estado { color: var(--tinta-2); font-size: 13px; }
+.nota-bloque { margin: 0 0 16px; color: var(--tinta-2); font-size: 13px; max-width: 95ch; }
 
 .narracion { margin: 0 0 10px; font-size: 15px; font-weight: 500; min-height: 1.5em; }
 .lienzo { background: var(--suelo); border-radius: 8px; overflow: hidden; }
 .leyenda { display: flex; flex-wrap: wrap; gap: 6px 20px; margin: 10px 0 0; padding: 0; list-style: none; color: var(--tinta-2); font-size: 13px; }
 .leyenda li { display: flex; align-items: center; gap: 8px; }
+.leyenda strong { font-weight: 600; color: var(--tinta); }
 .sw { flex: none; display: inline-block; width: 16px; height: 16px; border-radius: 3px; }
 .sw-caja { background: var(--carton); border: 1px solid var(--carton-borde); border-bottom: 3px solid var(--seguridad); }
 .sw-perdio { background: var(--carton); border: 2px solid var(--rojo); }
@@ -241,9 +287,14 @@ button, select, input { font: inherit; color: inherit; }
 .resultados .peor { color: var(--rojo); }
 .resultados tr.total td { font-weight: 600; border-bottom-color: var(--control); }
 .marca-serie { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
-.roi { margin: 14px 0 24px; max-width: 80ch; }
+.roi { margin: 16px 0 24px; padding: 12px 16px; max-width: 95ch; border-left: 3px solid var(--seguridad); background: var(--panel); border-radius: 0 8px 8px 0; }
+.roi:empty { display: none; }
 .graficos-hora { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--espacio); }
 .graficos-hora .grafico { height: 240px; }
+.graficos-base { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: var(--espacio); }
+.graficos-base .grafico { height: 230px; }
+
+.pie-pagina { display: flex; flex-wrap: wrap; gap: 6px 20px; margin-top: 40px; padding-top: 16px; border-top: 1px solid var(--linea); color: var(--tinta-2); font-size: 13px; }
 
 @media (max-width: 1100px) {
   .kpis, .contadores { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -257,6 +308,9 @@ button, select, input { font: inherit; color: inherit; }
 @media (max-width: 860px) {
   .marco { display: block; }
   .lateral { position: static; max-height: none; padding: 16px; }
+  .marca { margin-bottom: 16px; }
+  .lateral > section, .lateral > details { margin-top: 16px; }
+  .plegable[open] > summary { margin-bottom: 10px; }
   .hoja { margin: 0; border-radius: 0; border-width: 1px 0 0; padding: 20px 16px 32px; }
   .titulo { flex-direction: column; align-items: flex-start; gap: 6px; }
   .guia { grid-template-columns: 1fr; gap: 12px; }
@@ -266,6 +320,7 @@ button, select, input { font: inherit; color: inherit; }
 @media (max-width: 560px) {
   .resultados .ic { display: block; margin: 0; }
   .resultados th, .resultados td { padding: 8px 4px; }
+  .bloque-cab { flex-direction: column; align-items: flex-start; gap: 2px; }
 }
 @media (prefers-reduced-motion: reduce) {
   * { transition-duration: 0ms !important; }
