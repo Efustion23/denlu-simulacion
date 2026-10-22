@@ -5,18 +5,19 @@ Trabajo de Investigación de Operaciones 1: diagnóstico con teoría de colas, p
 ## Ver en línea
 
 - **Simulador interactivo:** https://efustion23.github.io/denlu-simulacion/
-- **Notebook en Google Colab:** [abrir](https://colab.research.google.com/github/Efustion23/denlu-simulacion/blob/main/Simulacion/Denlu.ipynb)
+- **Notebooks en Google Colab:** [diagnóstico y MILP](https://colab.research.google.com/github/Efustion23/denlu-simulacion/blob/main/Simulacion/Denlu.ipynb) · [simulación](https://colab.research.google.com/github/Efustion23/denlu-simulacion/blob/main/Simulacion/Denlu_Simulacion.ipynb)
 
 ## Contenido
 
 | Ruta | Qué es |
 |---|---|
-| [`Simulacion/Denlu.ipynb`](Simulacion/Denlu.ipynb) | Notebook único, en dos partes. **I. Diagnóstico y optimización:** colas M/M/c, modelo MILP con OR-Tools y ROI analítico. **II. Simulación:** modelo en SimPy, calibración, validación contra 2025, cuatro escenarios y conclusiones calculadas. La Parte II usa las variables de la Parte I (λ, μ, turnos, plan óptimo, costos), no copias. |
+| [`Simulacion/Denlu.ipynb`](Simulacion/Denlu.ipynb) | Diagnóstico con colas M/M/c, modelo MILP con OR-Tools y ROI. Es el notebook original del trabajo, sin cambios. |
+| [`Simulacion/Denlu_Simulacion.ipynb`](Simulacion/Denlu_Simulacion.ipynb) | Simulación de eventos discretos en SimPy que parte de los resultados de `Denlu.ipynb`: reproduce su diagnóstico, su MILP y su ROI, y luego calibra el modelo, lo valida contra 2025, corre cuatro escenarios y calcula las conclusiones. |
 | [`Simulacion/web/`](Simulacion/web/) | Simulador interactivo en el navegador: animación de un día en el almacén, comparación del año completo contra la situación actual y validación con los datos de 2025. Funciona sin internet (Chart.js y la tipografía Barlow van incluidos en `vendor/` y `fonts/`). |
 
 ## Datos
 
-El notebook parte del diagnóstico de 2025 (8 012 pedidos). Si el archivo `denlu_colab_2025.csv` está junto al notebook (en Colab: panel de archivos → subir) se usa completo. Si no, el notebook usa la tabla resumen del diagnóstico y el resultado es el mismo. El CSV no se publica en este repositorio.
+`Denlu.ipynb` lee `denlu_colab_2025.csv` (8 012 pedidos), que no se publica en este repositorio; para ejecutarlo hay que subir ese archivo junto al notebook (en Colab: panel de archivos → subir). `Denlu_Simulacion.ipynb` no lo necesita: parte de la tabla por hora y los totales que `Denlu.ipynb` ya calculó.
 
 ## Abrir el simulador en tu computadora
 
@@ -34,4 +35,4 @@ cd Simulacion/web
 node verificar.js
 ```
 
-Los parámetros compartidos entre ambos son: T = 20 min y p = 0.28 (calibrados en el capítulo 6 del notebook), μ = 44.5 min, 299 días y 10 réplicas. El anexo del notebook lista los planes del MILP para ρ = 0.85, 0.75 y 0.65 y comprueba que coinciden con los del simulador.
+Los parámetros compartidos entre ambos son: T = 20 min y p = 0.28 (calibrados en el capítulo 5 de `Denlu_Simulacion.ipynb`), μ = 44.5 min, 299 días y 10 réplicas. El anexo de `Denlu_Simulacion.ipynb` lista los planes del MILP para ρ = 0.85, 0.75 y 0.65 y comprueba que coinciden con los del simulador.

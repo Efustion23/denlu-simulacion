@@ -1,5 +1,5 @@
 // Modelo de simulación de eventos discretos del andén de DENLU.
-// Es el mismo modelo de Denlu.ipynb (Parte II) (SimPy), reescrito en JavaScript para el navegador.
+// Es el mismo modelo de Denlu_Simulacion.ipynb (SimPy), reescrito en JavaScript para el navegador.
 
 const MU_MIN = 44.5;                       // tiempo medio de despacho (min), exponencial
 const MU_H = 60 / MU_MIN;
