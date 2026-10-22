@@ -113,19 +113,19 @@
           <h2 id="tDia"><span class="num">4</span>Un día en el almacén</h2>
           <span class="estado" id="estadoDia" aria-live="polite"></span>
         </div>
-        <p class="nota-bloque">Mira cómo se forma la cola con cada plan. Es una ilustración que no forma parte de <code>Denlu.ipynb</code>: un día simulado pedido por pedido con las tasas λ por hora del diagnóstico y μ = 44.5 min. Supone que un pedido que espera más de 20 min pierde su ruta y, a veces, el cliente cancela.</p>
+        <p class="nota-bloque">El almacén visto desde arriba. Los pedidos llegan por teléfono y vendedores, se imprimen y esperan en el tablero. Cada despachador toma una hoja, recoge la mercadería en los estantes, la empaca en su mesa y la lleva al camión de su ruta; en el almuerzo o fuera de turno está en el comedor. Es una ilustración que no forma parte de <code>Denlu.ipynb</code>: un día simulado pedido por pedido con las tasas λ por hora del diagnóstico y μ = 44.5 min. Supone que un pedido que espera más de 20 min pierde su ruta y, a veces, el cliente cancela.</p>
         <div class="selector-plan">
           <div class="segmentado" id="presets" role="group" aria-label="Quién atiende el día"></div>
           <p class="costo"><span id="costoMes"></span> al mes <span class="costo-gente" id="totalPersonas"></span></p>
         </div>
         <p class="narracion" id="narracion"></p>
-        <div class="lienzo"><canvas id="lienzo" role="img" aria-label="Vista del almacén: cola de pedidos, despachadores y andén de carga"></canvas></div>
+        <div class="lienzo"><canvas id="lienzo" role="img" aria-label="Plano del almacén: oficina de ventas, tablero de pedidos, estantería, mesas de empaque, comedor y andén con los camiones de cada ruta"></canvas></div>
         <ul class="leyenda" aria-label="Qué significa cada cosa">
-          <li><span class="sw sw-caja"></span><span>Pedido esperando (la barra amarilla es su espera)</span></li>
-          <li><span class="sw sw-perdio"></span><span>Esperó más de <strong id="leyendaT">20</strong> min y perdió su camión</span></li>
-          <li><span class="sw sw-cancelo"></span><span>El cliente canceló</span></li>
-          <li><span class="sw sw-desp"></span><span>Despachador trabajando</span></li>
-          <li><span class="sw sw-fuera"></span><span>Puesto vacío (almuerzo o fuera de turno)</span></li>
+          <li><span class="sw sw-hoja"></span><span>Pedido en el tablero (la barra amarilla es su espera)</span></li>
+          <li><span class="sw sw-hoja sw-perdio"></span><span>Esperó más de <strong id="leyendaT">20</strong> min y perdió su camión</span></li>
+          <li><span class="sw sw-hoja sw-cancelo"></span><span>El cliente canceló</span></li>
+          <li><span class="sw sw-desp"></span><span>Despachador (D1, D2…) con chaleco</span></li>
+          <li><span class="sw sw-caja"></span><span>Caja del pedido: se recoge, se empaca y va al camión</span></li>
         </ul>
         <div class="reproductor">
           <button type="button" id="play" class="primario">Reproducir</button>
@@ -133,8 +133,11 @@
           <button type="button" id="otroDia">Otro día</button>
           <label class="velocidad">Velocidad
             <select id="velocidad">
-              <option value="5">1 s = 5 min</option>
-              <option value="15" selected>1 s = 15 min</option>
+              <option value="1">1 s = 1 min</option>
+              <option value="2">1 s = 2 min</option>
+              <option value="5" selected>1 s = 5 min</option>
+              <option value="10">1 s = 10 min</option>
+              <option value="15">1 s = 15 min</option>
               <option value="30">1 s = 30 min</option>
               <option value="60">1 s = 1 hora</option>
             </select>

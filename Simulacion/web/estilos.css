@@ -251,13 +251,13 @@ a { color: var(--acero); text-underline-offset: 3px; }
 .leyenda li { display: flex; align-items: center; gap: 8px; }
 .leyenda strong { font-weight: 600; color: var(--tinta); }
 .sw { flex: none; display: inline-block; width: 16px; height: 16px; border-radius: 3px; }
-.sw-caja { background: var(--carton); border: 1px solid var(--carton-borde); border-bottom: 3px solid var(--seguridad); }
-.sw-perdio { background: var(--carton); border: 2px solid var(--rojo); }
-.sw-cancelo { background: var(--carton); border: 2px solid var(--rojo); position: relative; overflow: hidden; }
+.sw-caja { background: var(--carton); border: 1px solid var(--carton-borde); }
+.sw-hoja { width: 13px; background: #fbfaf6; border: 1px solid var(--control); border-bottom: 3px solid var(--seguridad); }
+.sw-perdio { border: 2px solid var(--rojo); border-bottom-width: 3px; }
+.sw-cancelo { border: 2px solid var(--rojo); position: relative; overflow: hidden; }
 .sw-cancelo::before, .sw-cancelo::after { content: ""; position: absolute; left: -2px; right: -2px; top: 5px; height: 2px; background: var(--rojo); transform: rotate(45deg); }
 .sw-cancelo::after { transform: rotate(-45deg); }
-.sw-desp { border-radius: 50%; background: var(--acero); }
-.sw-fuera { border: 1px dashed var(--control); }
+.sw-desp { border-radius: 50%; background: #ec7a1c; box-shadow: inset 0 0 0 4px #ec7a1c, inset 0 0 0 8px #1d1612; }
 .lienzo canvas { display: block; width: 100%; height: auto; }
 .reproductor { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 12px 0; }
 .reproductor .primario { background: var(--primario); color: var(--primario-tinta); border-color: var(--primario); min-width: 7rem; font-weight: 600; }
