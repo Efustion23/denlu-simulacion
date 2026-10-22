@@ -1,4 +1,5 @@
-// Verifica que el modelo en JavaScript da los mismos resultados que Simulacion/Denlu.ipynb (diagnóstico, MILP y SimPy).
+// Verifica que el modelo en JavaScript da los mismos resultados que Simulacion/Denlu.ipynb (diagnóstico y MILP)
+// y Simulacion/Denlu_Simulacion.ipynb (SimPy).
 // Uso: node verificar.js
 const assert = require('assert');
 const S = require('./simulacion.js');
