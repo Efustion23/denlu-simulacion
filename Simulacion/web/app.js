@@ -359,7 +359,7 @@ const pantallaChica = matchMedia('(max-width: 700px)');
 // `red` son los pasillos (segmentos horizontales o verticales) por donde camina la gente.
 const PLANOS = {
   ancho: {
-    W: 960, H: 560, esc: 1.2, escCamion: 1, texto: 13,
+    W: 960, H: 560, esc: 1.2, escCamion: 1, texto: 13, aviso: [555, 38],
     reloj: { x: 16, y: 14, w: 116, h: 48, fuente: 36, textoX: 146, y1: 30, y2: 50 },
     oficina: { x: 16, y: 76, w: 230, h: 120, escritorio: [30, 102, 156, 20], vendedores: [[60, 140], [160, 140]], impresora: [200, 102, 32, 24] },
     tablero: { x: 16, y: 210, w: 230, h: 200, gx: 26, gy: 238, cols: 5, filas: 4, cw: 38, ch: 42, bandeja: [220, 282], bandejaRect: [216, 270, 26, 56] },
@@ -375,7 +375,7 @@ const PLANOS = {
     etiquetas: [['Estantería', 290, 80], ['Mesas de empaque', 290, 462], ['Andén de carga', 728, 52]],
   },
   angosto: {
-    W: 420, H: 736, esc: 1, escCamion: 0.85, texto: 12,
+    W: 420, H: 736, esc: 1, escCamion: 0.85, texto: 12, aviso: [210, 240],
     reloj: { x: 12, y: 10, w: 100, h: 42, fuente: 30, textoX: 124, y1: 24, y2: 44 },
     oficina: { x: 12, y: 62, w: 396, h: 96, escritorio: [30, 84, 250, 18], vendedores: [[96, 122], [214, 122]], impresora: [330, 96, 40, 26] },
     tablero: { x: 12, y: 168, w: 396, h: 116, gx: 22, gy: 194, cols: 9, filas: 2, cw: 37, ch: 44, bandeja: [372, 210], bandejaRect: [364, 196, 28, 74] },
@@ -510,14 +510,15 @@ function nuevoDia() {
   dia = {
     log, i: 0, t: 0, fin: log.length ? log[log.length - 1].t : 0, cap,
     pedidos: new Map(), cola: [], estaciones: Array.from({ length: cap }, (_, k) => ({ activa: k < personal[0], pedido: null })),
-    flota: [0, 1, 2].map(() => ({ carga: 0, enCamino: 0, d: 0, fase: 'anden', viajes: 0 })), faltaron: totalPersonas(estado.plan) - totalPersonas(presentes),
+    flota: [0, 1, 2].map(() => ({ carga: 0, enCamino: 0, d: 0, fase: 'anden', viajes: 0, puerta: 1, pop: 0, humoT: 0 })), faltaron: totalPersonas(estado.plan) - totalPersonas(presentes),
     cont: { llegados: 0, despachados: 0, perdieron: 0, cancelados: 0, espera: 0, nEspera: 0 },
     serie: { cola: [], turno: [] }, minuto: -1, servicios: log.filter((e) => e.tipo === 'inicio'), burbujas: [],
+    humo: [], avisos: [], hora: 0, sel: null, hover: null,
   };
   // Al empezar el día cada despachador en turno está en su mesa; los demás, en el comedor y vestuario
   dia.personas = dia.estaciones.map((e, k) => {
     const lugar = e.activa ? lugarMesa(k) : lugarAsiento(k);
-    return { x: lugar.punto[0], y: lugar.punto[1], ang: lugar.ang, paso: 0, lugar, destino: lugar, ruta: [], activo: e.activa,
+    return { x: lugar.punto[0], y: lugar.punto[1], ang: lugar.ang, angVis: lugar.ang, paso: 0, despachados: 0, lugar, destino: lugar, ruta: [], activo: e.activa,
       trabajo: null, carga: null, piel: PIEL[k % PIEL.length], pelo: PELO[k % PELO.length] };
   });
   avanzar(0);
@@ -571,7 +572,10 @@ function elegirCamion() {
 
 function entrarEtapa(per, i) {
   const tr = per.trabajo, tramo = tr.tramos[i];
-  if (tramo.tipo === 'hoja') { dia.pedidos.delete(tr.id); per.carga = 'hoja'; }
+  if (tramo.tipo === 'hoja') {
+    const p = dia.pedidos.get(tr.id);
+    if (p) Object.assign(p, { estado: 'tomando', x0: p.x, y0: p.y });
+  } else if (i === 2) { dia.pedidos.delete(tr.id); per.carga = 'hoja'; }
   else if (i === 4) per.carga = 'caja';                    // sale del estante con la mercadería
   else if (tramo.tipo === 'empacar') per.carga = null;      // la caja queda en la mesa
   else if (i === 6) {
@@ -588,16 +592,19 @@ function seguirTrabajo(per, t) {
 function aplicar(ev) {
   const d = dia, p = d.pedidos.get(ev.id);
   const sacarDeCola = () => d.cola.splice(d.cola.indexOf(ev.id), 1);
-  const avisar = (texto, malo) => d.burbujas.push({ v: ev.id % P.oficina.vendedores.length, texto, malo, vida: 1.6 });
+  const avisar = (texto, malo) => {                       // un solo globo por vendedor: el nuevo reemplaza al anterior
+    const v = ev.id % P.oficina.vendedores.length;
+    d.burbujas = d.burbujas.filter((b) => b.v !== v).concat({ v, texto, malo, vida: 1.6 });
+  };
   if (ev.tipo === 'llegada') {
     // Se imprime en la oficina de ventas y vuela al tablero de pendientes
     const [x, y] = P.oficina.impresora;
-    d.pedidos.set(ev.id, { llegada: ev.t, x: x + 6, y: y + 2, estado: 'cola', perdio: false, alfa: 1 });
+    d.pedidos.set(ev.id, { llegada: ev.t, x: x + 6, y: y + 2, estado: 'cola', perdio: false, alfa: 1, escala: 0.4, nace: reducirMovimiento ? 0 : 0.45 });
     d.cola.push(ev.id);
     d.cont.llegados++;
     avisar('Pedido nuevo', false);
   } else if (ev.tipo === 'perdio') {
-    p.perdio = true; d.cont.perdieron++;
+    p.perdio = true; p.sacude = 0.7; d.cont.perdieron++;
   } else if (ev.tipo === 'cancela') {
     sacarDeCola();
     p.estado = 'cancelado';
@@ -605,20 +612,21 @@ function aplicar(ev) {
     avisar('Canceló', true);
   } else if (ev.tipo === 'inicio') {
     sacarDeCola();
-    p.estado = 'asignado';
+    Object.assign(p, { estado: 'asignado', est: ev.est });
     d.estaciones[ev.est].pedido = ev.id;
     d.cont.espera += ev.t - p.llegada; d.cont.nEspera++;
     asignar(d.personas[ev.est], ev);
+    d.personas[ev.est].trabajo.espera = ev.t - p.llegada;
   } else if (ev.tipo === 'fin') {
     const per = d.personas[ev.est];
     seguirTrabajo(per, Infinity);
     const c = d.flota[per.trabajo.camion];
-    c.enCamino--; c.carga++;                                // la caja queda en el camión (o en el andén si salió)
+    c.enCamino--; c.carga++; c.pop = 1;                      // la caja queda en el camión (o en el andén si salió)
     const bahia = lugarBahia(per.trabajo.camion);
     Object.assign(per, { x: bahia.punto[0], y: bahia.punto[1], ang: bahia.ang, lugar: bahia, destino: bahia, trabajo: null, carga: null, ruta: [] });
     d.pedidos.delete(ev.id);
     d.estaciones[ev.est].pedido = null;
-    d.cont.despachados++;
+    d.cont.despachados++; per.despachados++;
     irA(per, lugarMesa(ev.est));
   } else if (ev.tipo === 'sale') {
     d.estaciones[ev.est].activa = false;
@@ -635,8 +643,19 @@ function aplicar(ev) {
   }
 }
 
+// Aviso que entra por arriba del plano y se desvanece
+const aviso = (texto, malo = false) => { dia.avisos.push({ texto, malo, vida: 2.6 }); dia.avisos = dia.avisos.slice(-2); };
+function avisoHora(h) {
+  if (h >= 10) { aviso('18:00 · Cierra el almacén: horas extra', dia.cola.length > 0); return; }
+  const lam = S.LAMBDA[h] * (1 + estado.crec / 100), n = dia.estaciones.filter((e) => e.activa).length;
+  const punta = lam > n * S.MU_H;                           // llegan más pedidos de los que se pueden atender
+  aviso(`${horaTexto(8 + h)} · llegan ~${lam.toFixed(1)} pedidos/h · ${n} en turno${punta ? ' · no alcanzan' : ''}`, punta);
+}
+
 function avanzar(hasta) {
   while (dia.i < dia.log.length && dia.log[dia.i].t <= hasta) aplicar(dia.log[dia.i++]);
+  const hora = Math.floor(hasta / 60);
+  if (hora > dia.hora) { dia.hora = hora; avisoHora(hora); }
   const minuto = Math.floor(hasta);
   if (minuto > dia.minuto) {
     dia.minuto = minuto;
@@ -651,8 +670,24 @@ function mover(dt, dtSim) {
   dia.cola.forEach((id, i) => { const p = dia.pedidos.get(id); [p.tx, p.ty] = posHoja(i); });
   let enBandeja = 0;
   for (const [id, p] of dia.pedidos) {
+    p.sacude = Math.max(0, (p.sacude || 0) - dt);
+    if (p.nace > 0) {                                       // la hoja sale de la impresora
+      p.nace -= dt;
+      const [ix, iy, iw, ih] = P.oficina.impresora, f = 1 - Math.max(0, p.nace) / 0.45;
+      p.x = ix + iw / 2 - 11; p.y = iy + ih / 2 - 14 + 16 * f; p.escala = 0.4 + 0.3 * f;
+      continue;
+    }
+    if (p.estado === 'tomando') {                           // el despachador la saca de la bandeja
+      const per = dia.personas[p.est], tramo = per.trabajo && per.trabajo.tramos[1];
+      if (!tramo) continue;
+      const f = suave(Math.min(1, (dia.t - tramo.t0) / Math.max(1e-6, tramo.t1 - tramo.t0)));
+      const hx = per.x + Math.cos(per.angVis) * 11 * P.esc - 11, hy = per.y + Math.sin(per.angVis) * 11 * P.esc - 14;
+      p.x = p.x0 + (hx - p.x0) * f; p.y = p.y0 + (hy - p.y0) * f; p.escala = 1 - 0.65 * f;
+      continue;
+    }
     if (p.estado === 'asignado') { p.tx = P.tablero.bandeja[0]; p.ty = P.tablero.bandeja[1] + 6 * enBandeja++; }
-    if (p.estado === 'cancelado') { p.tx = p.x; p.ty = p.y; p.alfa -= dt * 1.2; }
+    if (p.estado === 'cancelado') { p.tx = p.x; p.ty = p.y + 10; p.alfa -= dt * 1.2; p.rot = (p.rot || 0) + dt * 5; p.escala = Math.max(0.2, p.alfa); }
+    else p.escala += (1 - p.escala) * k;
     p.x += (p.tx - p.x) * k;
     p.y += (p.ty - p.y) * k;
     if (p.alfa <= 0) dia.pedidos.delete(id);
@@ -664,7 +699,7 @@ function mover(dt, dtSim) {
       const tramo = per.trabajo.tramos[per.trabajo.fase];
       if (tramo.tipo === 'camino') {
         const f = tramo.t1 > tramo.t0 ? Math.min(1, (dia.t - tramo.t0) / (tramo.t1 - tramo.t0)) : 1;
-        const [x, y, a] = puntoEn(tramo.dato, f * largo(tramo.dato));
+        const [x, y, a] = puntoEn(tramo.dato, perfil(f) * largo(tramo.dato));
         per.x = x; per.y = y;
         if (a !== null && (x !== x0 || y !== y0)) per.ang = a;
       } else {
@@ -682,8 +717,15 @@ function mover(dt, dtSim) {
     }
     const paso = dist([x0, y0], [per.x, per.y]);
     per.camina = paso > 0.05;
-    per.paso += paso * 0.35;
+    per.paso += Math.min(paso * 0.35, dt * 13);             // a velocidades altas el paso no se vuelve un temblor
+    // Gira de a poco hacia donde va, por el lado más corto
+    const giro = Math.atan2(Math.sin(per.ang - per.angVis), Math.cos(per.ang - per.angVis));
+    per.angVis += giro * (reducirMovimiento ? 1 : 1 - Math.exp(-dt * 14));
   }
+  dia.humo.forEach((h) => { h.vida -= dt; h.x += h.vx * dt; h.y += h.vy * dt; });
+  dia.humo = dia.humo.filter((h) => h.vida > 0);
+  dia.avisos.forEach((a) => { a.vida -= dt; });
+  dia.avisos = dia.avisos.filter((a) => a.vida > 0);
   dia.burbujas.forEach((b) => { b.vida -= dt; });
   dia.burbujas = dia.burbujas.filter((b) => b.vida > 0).slice(-3);
   moverCamiones(dt);
@@ -691,20 +733,39 @@ function mover(dt, dtSim) {
 
 // El camión lleno arranca (acelera), se vacía fuera de la vista y vuelve frenando al andén
 function moverCamiones(dt) {
-  for (const c of dia.flota) {
-    if (c.fase === 'anden' && c.carga >= CARGA_VIAJE && c.enCamino === 0) {
-      c.fase = 'saliendo'; c.vel = 0; c.viajes++;
-    }
-    if (reducirMovimiento && c.fase !== 'anden') { c.fase = 'anden'; c.d = 0; c.carga = Math.max(0, c.carga - CARGA_VIAJE); continue; }
-    if (c.fase === 'saliendo') {
+  dia.flota.forEach((c, k) => {
+    c.pop = Math.max(0, c.pop - dt * 3);
+    if (c.fase === 'anden' && c.carga >= CARGA_VIAJE && c.enCamino === 0) { c.fase = 'cerrando'; c.viajes++; }
+    if (reducirMovimiento && c.fase !== 'anden') { c.fase = 'anden'; c.d = 0; c.carga = Math.max(0, c.carga - CARGA_VIAJE); return; }
+    if (c.fase === 'anden') c.puerta = Math.min(1, c.puerta + dt * 2.5);
+    if (c.fase === 'cerrando') {
+      c.puerta -= dt * 3;
+      if (c.puerta <= 0) { c.puerta = 0; c.fase = 'saliendo'; c.vel = 0; aviso(`Sale el camión de la ruta ${k + 1} con ${CARGA_VIAJE} pedidos`); }
+    } else if (c.fase === 'saliendo') {
+      c.humoT -= dt;
+      if (c.humoT <= 0 && c.d < 200) {                      // humo del escape, hacia atrás del camión
+        c.humoT = 0.05;
+        const [ox, oy] = origenCamion(k), a = P.anden.ang, e = P.escCamion, lx = 112 * e, ly = -22 * e;
+        dia.humo.push({ x: ox + Math.cos(a) * lx - Math.sin(a) * ly, y: oy + Math.sin(a) * lx + Math.cos(a) * ly,
+          vx: -Math.cos(a) * 25 + (Math.random() - 0.5) * 14, vy: -Math.sin(a) * 25 + (Math.random() - 0.5) * 14, vida: 0.9 });
+      }
       c.vel += 700 * dt; c.d += c.vel * dt;
       if (c.d > 260) { c.fase = 'volviendo'; c.carga = Math.max(0, c.carga - CARGA_VIAJE); }   // lo que sobró espera el próximo viaje
     } else if (c.fase === 'volviendo') {
       c.d *= Math.exp(-dt * 4);
       if (c.d < 0.5) { c.d = 0; c.fase = 'anden'; }
     }
-  }
+  });
 }
+
+// Velocidad al caminar: arranca, va parejo y frena al llegar (perfil trapezoidal, 12 % en cada punta)
+function perfil(f, a = 0.12) {
+  const v = 1 / (1 - a);
+  if (f < a) return (v * f * f) / (2 * a);
+  if (f > 1 - a) return 1 - (v * (1 - f) ** 2) / (2 * a);
+  return v * (f - a / 2);
+}
+const suave = (f) => f * f * (3 - 2 * f);
 
 /* --- Dibujo --- */
 
@@ -723,30 +784,37 @@ function cajaDibujo(x, y, w, h) {
   ctx.fillRect(x + w / 2 - 1.5, y + 1, 3, h - 2);
 }
 
-// Hoja de pedido clavada en el tablero; la barra de abajo es cuánto de la espera máxima lleva
+// Hoja de pedido clavada en el tablero; la barra de abajo es cuánto de la espera máxima lleva.
+// Se sacude al perder su camión y, si el cliente cancela, se arruga (gira y se achica) mientras se desvanece.
 function dibujarHoja(p) {
-  ctx.globalAlpha = Math.max(0, Math.min(1, p.alfa));
   const w = 22, h = 28;
-  rect(p.x, p.y, w, h, 2);
+  ctx.save();
+  ctx.globalAlpha = Math.max(0, Math.min(1, p.alfa));
+  ctx.translate(p.x + w / 2 + (p.sacude > 0 ? Math.sin(p.sacude * 60) * 2.5 * p.sacude : 0), p.y + h / 2);
+  if (p.rot) ctx.rotate(p.rot);
+  ctx.scale(p.escala ?? 1, p.escala ?? 1);
+  ctx.translate(-w / 2, -h / 2);
+  const roja = p.perdio || p.estado === 'cancelado';
+  rect(0, 0, w, h, 2);
   ctx.fillStyle = '#fbfaf6'; ctx.fill();
-  ctx.lineWidth = p.perdio || p.estado === 'cancelado' ? 2.2 : 1;
-  ctx.strokeStyle = p.perdio || p.estado === 'cancelado' ? C.rojo : 'rgba(0,0,0,0.25)'; ctx.stroke();
+  ctx.lineWidth = roja ? 2.2 : 1;
+  ctx.strokeStyle = roja ? C.rojo : 'rgba(0,0,0,0.25)'; ctx.stroke();
   ctx.fillStyle = 'rgba(0,0,0,0.28)';
-  for (let i = 0; i < 4; i++) ctx.fillRect(p.x + 4, p.y + 7 + i * 5, i === 3 ? 8 : 14, 1.5);
-  ctx.fillStyle = C.rojo; circulo(p.x + w / 2, p.y + 2, 2.2);   // chinche
-  if (p.estado === 'cola') {
+  for (let i = 0; i < 4; i++) ctx.fillRect(4, 7 + i * 5, i === 3 ? 8 : 14, 1.5);
+  if (p.estado === 'cola' || p.estado === 'asignado') { ctx.fillStyle = C.rojo; circulo(w / 2, 2, 2.2); }   // chinche
+  if (p.estado === 'cola' && !(p.nace > 0)) {
     const f = Math.min(1, (dia.t - p.llegada) / estado.T);
-    ctx.fillStyle = 'rgba(0,0,0,0.15)'; ctx.fillRect(p.x, p.y + h + 3, w, 3);
-    ctx.fillStyle = f >= 1 ? C.rojo : C.seguridad; ctx.fillRect(p.x, p.y + h + 3, w * f, 3);
+    ctx.fillStyle = 'rgba(0,0,0,0.15)'; ctx.fillRect(0, h + 3, w, 3);
+    ctx.fillStyle = f >= 1 ? C.rojo : C.seguridad; ctx.fillRect(0, h + 3, w * f, 3);
   }
   if (p.estado === 'cancelado') {
     ctx.strokeStyle = C.rojo; ctx.lineWidth = 3;
     ctx.beginPath();
-    ctx.moveTo(p.x + 3, p.y + 4); ctx.lineTo(p.x + w - 3, p.y + h - 4);
-    ctx.moveTo(p.x + w - 3, p.y + 4); ctx.lineTo(p.x + 3, p.y + h - 4);
+    ctx.moveTo(3, 4); ctx.lineTo(w - 3, h - 4);
+    ctx.moveTo(w - 3, 4); ctx.lineTo(3, h - 4);
     ctx.stroke();
   }
-  ctx.globalAlpha = 1;
+  ctx.restore();
 }
 
 // Persona vista desde arriba: hombros, cabeza, brazos y pies que se mueven al caminar.
@@ -762,7 +830,8 @@ function dibujarPersona(x, y, ang, o) {
     ctx.fillStyle = '#2c2a28';
     elipse(s * 6, -4.5, 3.8, 2.4); elipse(-s * 6, 4.5, 3.8, 2.4);
   }
-  ctx.fillStyle = o.ropa; elipse(0, 0, 6.5, 10.5);
+  const balanceo = o.camina ? 1 + 0.05 * Math.abs(s) : 1;   // los hombros se mecen con cada paso
+  ctx.fillStyle = o.ropa; elipse(0, 0, 6.5 * balanceo, 10.5);
   if (o.chaleco) {                                          // chaleco de seguridad con cinta reflectiva
     ctx.fillStyle = '#ffe7a6'; ctx.fillRect(-1.3, -9.5, 2.6, 19);
   }
@@ -770,6 +839,7 @@ function dibujarPersona(x, y, ang, o) {
   if (o.carga === 'caja') { cajaDibujo(5, -8, 13, 16); brazos = [[9, -8.5], [9, 8.5]]; }
   else if (o.accion) brazos = [[5 + 3 * Math.sin(o.t), -8], [5 + 3 * Math.sin(o.t + Math.PI), 8]];
   else if (o.telefono) brazos = [[3, -8], [6, 6]];
+  else if (o.come) brazos = [[6, -7], [4 + 3 * Math.max(0, Math.sin(o.t)), 7 - 4 * Math.max(0, Math.sin(o.t))]];
   else brazos = [[-s * 4.5, -9.5], [s * 4.5, 9.5]];
   ctx.fillStyle = o.piel; brazos.forEach(([bx, by]) => circulo(bx, by, 2.9));
   if (o.carga === 'hoja') { ctx.fillStyle = '#fbfaf6'; ctx.fillRect(8, 3, 6, 8); ctx.strokeStyle = 'rgba(0,0,0,0.3)'; ctx.lineWidth = 0.8; ctx.strokeRect(8, 3, 6, 8); }
@@ -833,7 +903,27 @@ function dibujarMesas() {
       // La caja que se está armando, con un anillo de avance
       const tramo = tr.tramos[tr.fase], f = Math.min(1, (dia.t - tramo.t0) / Math.max(1e-6, tramo.t1 - tramo.t0));
       const bx = m.cx - 7, by = m.y + m.h / 2 - 7;
-      cajaDibujo(bx, by, 14, 14);
+      rect(bx, by, 14, 14, 2); ctx.fillStyle = C.carton; ctx.fill();
+      ctx.lineWidth = 1; ctx.strokeStyle = C['carton-borde']; ctx.stroke();
+      const abierta = Math.max(0, 1 - f / 0.55);              // las solapas se van cerrando
+      if (abierta > 0) {
+        ctx.fillStyle = C.carton; ctx.strokeStyle = C['carton-borde'];
+        for (const [dx, dy] of [[0, -1], [0, 1], [-1, 0], [1, 0]]) {
+          const l = 6 * abierta, cx = m.cx + dx * 7, cy = m.y + m.h / 2 + dy * 7;
+          ctx.beginPath();
+          ctx.moveTo(cx - dy * 6, cy - dx * 6); ctx.lineTo(cx + dy * 6, cy + dx * 6);
+          ctx.lineTo(cx + dy * 4 + dx * l, cy + dx * 4 + dy * l); ctx.lineTo(cx - dy * 4 + dx * l, cy - dx * 4 + dy * l);
+          ctx.closePath(); ctx.fill(); ctx.stroke();
+        }
+      } else {
+        ctx.fillStyle = 'rgba(0,0,0,0.25)'; ctx.fillRect(bx + 1, m.y + m.h / 2 - 0.5, 12, 1);
+        const cinta = Math.min(1, Math.max(0, (f - 0.6) / 0.25)); // la cinta corre de punta a punta
+        ctx.fillStyle = 'rgba(255,255,255,0.7)'; ctx.fillRect(m.cx - 1.5, by + 1, 3, 12 * cinta);
+      }
+      if (f > 0.9) {                                         // lista: un visto verde
+        ctx.strokeStyle = C.verde; ctx.lineWidth = 2.2; ctx.beginPath();
+        ctx.moveTo(m.cx + 9, m.y + 2); ctx.lineTo(m.cx + 12, m.y + 5); ctx.lineTo(m.cx + 17, m.y - 1); ctx.stroke();
+      }
       ctx.lineWidth = 2.5; ctx.lineCap = 'round';
       ctx.strokeStyle = C.acero; ctx.beginPath();
       ctx.arc(m.cx, m.y + m.h / 2, 11, -Math.PI / 2, -Math.PI / 2 + 2 * Math.PI * f); ctx.stroke();
@@ -853,8 +943,19 @@ function dibujarCamion(k) {
   rect(114, -25, 34, 50, 6); ctx.fillStyle = C.acero; ctx.fill();
   ctx.fillStyle = 'rgba(255,255,255,0.55)'; ctx.fillRect(138, -19, 6, 38);   // parabrisas
   if (c.fase !== 'volviendo') {
-    for (let i = 0; i < Math.min(c.carga, CARGA_VIAJE); i++) cajaDibujo(10 + (i % 3) * 32, -23 + Math.floor(i / 3) * 24, 26, 21);
+    const n = Math.min(c.carga, CARGA_VIAJE);
+    for (let i = 0; i < n; i++) {
+      const x = 10 + (i % 3) * 32, y = -23 + Math.floor(i / 3) * 24, e = i === n - 1 ? 1 + 0.45 * c.pop : 1;
+      ctx.save(); ctx.translate(x + 13, y + 10.5); ctx.scale(e, e); cajaDibujo(-13, -10.5, 26, 21); ctx.restore();
+    }
   }
+  // Puertas traseras: abiertas en el andén, se cierran antes de salir
+  ctx.strokeStyle = C['tinta-2']; ctx.lineWidth = 3; ctx.lineCap = 'round';
+  const giro = (Math.PI / 2 + 0.35) * c.puerta;
+  for (const lado of [-1, 1]) {                             // bisagra en cada esquina; cerrada apunta al centro
+    ctx.beginPath(); ctx.moveTo(0, lado * 28); ctx.lineTo(-26 * Math.sin(giro), lado * (28 - 26 * Math.cos(giro))); ctx.stroke();
+  }
+  ctx.lineCap = 'butt';
   ctx.restore();
 }
 
@@ -868,6 +969,95 @@ function dibujarBurbuja(b) {
   ctx.beginPath(); ctx.moveTo(vx - 5, y + 1); ctx.lineTo(vx, y - 6); ctx.lineTo(vx + 5, y + 1); ctx.fill();
   ctx.fillStyle = b.malo ? '#fff' : C.fondo; ctx.fillText(b.texto, x + 7, y + 10.5);
   ctx.globalAlpha = 1;
+}
+
+// Mientras recoge, tres productos saltan del estante a sus brazos
+function dibujarRecogida(per, tramo, id) {
+  const f = Math.min(1, (dia.t - tramo.t0) / Math.max(1e-6, tramo.t1 - tramo.t0)), a = per.angVis, e = P.esc;
+  const sx = per.x + Math.cos(a) * 24 * e, sy = per.y + Math.sin(a) * 24 * e;
+  const hx = per.x + Math.cos(a) * 8 * e, hy = per.y + Math.sin(a) * 8 * e;
+  const caja = (x, y, i) => {
+    ctx.fillStyle = PRODUCTOS[(id + i) % PRODUCTOS.length]; ctx.fillRect(x - 3.5, y - 3.5, 7, 7);
+    ctx.strokeStyle = 'rgba(0,0,0,0.3)'; ctx.lineWidth = 1; ctx.strokeRect(x - 3.5, y - 3.5, 7, 7);
+  };
+  for (let i = 0; i < 3; i++) {
+    const g = (f - (0.1 + i * 0.28)) / 0.22;
+    if (g >= 1) caja(hx + (i - 1) * 5 * Math.sin(a), hy - (i - 1) * 5 * Math.cos(a), i);   // ya en los brazos
+    else if (g > 0) { const q = suave(g); caja(sx + (hx - sx) * q, sy + (hy - sy) * q - Math.sin(q * Math.PI) * 9, i); }
+  }
+}
+
+// Lo que le queda por caminar a una persona, para dibujar su recorrido
+function rutaPendiente(per) {
+  if (!per.trabajo) return [[per.x, per.y], ...per.ruta];
+  const tr = per.trabajo, pts = [[per.x, per.y]];
+  tr.tramos.forEach((tm, i) => {
+    if (i < tr.fase || tm.tipo !== 'camino') return;
+    if (i > tr.fase) { pts.push(...tm.dato); return; }
+    const f = tm.t1 > tm.t0 ? Math.min(1, (dia.t - tm.t0) / (tm.t1 - tm.t0)) : 1;
+    let d = perfil(f) * largo(tm.dato);
+    tm.dato.forEach((q, j) => { if (j) d -= dist(tm.dato[j - 1], q); if (d < 0) pts.push(q); });
+  });
+  return pts;
+}
+
+const ETAPAS = ['Va al tablero por la hoja del pedido', 'Toma la hoja del pedido', 'Camina al estante', 'Recoge la mercadería',
+  'Lleva la mercadería a su mesa', 'Empaca el pedido', 'Lleva la caja al camión'];
+function queHace(per) {
+  if (per.trabajo) {
+    const tr = per.trabajo;
+    return [ETAPAS[tr.fase] + (tr.fase === 6 ? ` de la ruta ${tr.camion + 1}` : ''), `Pedido n.º ${tr.id + 1} · esperó ${Math.round(tr.espera)} min en el tablero`];
+  }
+  if (!per.activo) return [per.ruta.length ? 'Va al comedor' : 'En el comedor: almuerzo o fuera de turno'];
+  return [per.ruta.length ? 'Vuelve a su mesa' : 'Libre: espera el próximo pedido'];
+}
+
+// Ficha de la persona señalada, con su recorrido pendiente marcado en el piso
+function dibujarFoco(k) {
+  const per = dia.personas[k], ruta = rutaPendiente(per);
+  if (ruta.length > 1) {
+    ctx.strokeStyle = C.acero; ctx.lineWidth = 2.5; ctx.setLineDash([6, 6]);
+    ctx.lineDashOffset = reducirMovimiento ? 0 : -performance.now() / 40;   // la línea avanza en el sentido de la marcha
+    ctx.beginPath(); ruta.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y))); ctx.stroke();
+    ctx.setLineDash([]);
+    const [fx, fy] = ruta[ruta.length - 1];
+    ctx.fillStyle = C.acero; circulo(fx, fy, 4);
+  }
+  ctx.strokeStyle = C.acero; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.arc(per.x, per.y, 17 * P.esc, 0, 2 * Math.PI); ctx.stroke();
+}
+function dibujarFicha(k) {
+  const per = dia.personas[k];
+  const lineas = [`D${k + 1} · ${per.activo || per.trabajo ? 'en turno' : 'fuera de turno'}`, ...queHace(per),
+    `Despachó ${per.despachados} pedido${per.despachados === 1 ? '' : 's'} hoy`];
+  ctx.textBaseline = 'middle';
+  ctx.font = `500 ${P.texto}px Barlow, sans-serif`;
+  const w = Math.max(...lineas.map((l) => ctx.measureText(l).width)) + 22, h = lineas.length * 18 + 12;
+  let x = per.x + 22, y = per.y - h - 10;
+  if (x + w > P.W - 6) x = per.x - 22 - w;
+  if (y < 6) y = per.y + 22;
+  x = Math.max(6, x); y = Math.min(P.H - h - 6, y);
+  rect(x, y, w, h, 8); ctx.fillStyle = C.tinta; ctx.globalAlpha = 0.95; ctx.fill(); ctx.globalAlpha = 1;
+  lineas.forEach((l, i) => {
+    ctx.font = `${i ? 500 : 700} ${P.texto}px Barlow, sans-serif`;
+    ctx.fillStyle = C.fondo; ctx.globalAlpha = i === 0 || i === 1 ? 1 : 0.75;
+    ctx.fillText(l, x + 11, y + 15 + i * 18);
+  });
+  ctx.globalAlpha = 1;
+}
+
+// Avisos de la hora y de los camiones que salen: entran deslizándose y se desvanecen
+function dibujarAvisos() {
+  dia.avisos.forEach((a, i) => {
+    const entra = Math.min(1, (2.6 - a.vida) / 0.3), sale = Math.min(1, a.vida / 0.5);
+    ctx.font = `600 ${P.texto}px Barlow, sans-serif`; ctx.textBaseline = 'middle'; ctx.textAlign = 'center';
+    const w = Math.min(P.W - 24, ctx.measureText(a.texto).width + 24), [cx, cy] = P.aviso;
+    const y = cy + i * 28 - (reducirMovimiento ? 0 : 10 * (1 - suave(entra)));
+    ctx.globalAlpha = Math.min(entra, sale);
+    rect(cx - w / 2, y - 12, w, 24, 12); ctx.fillStyle = a.malo ? C.rojo : C.tinta; ctx.fill();
+    ctx.fillStyle = a.malo ? '#fff' : C.fondo; ctx.fillText(a.texto, cx, y + 0.5, w - 16);
+    ctx.globalAlpha = 1; ctx.textAlign = 'left';
+  });
 }
 
 function dibujar() {
@@ -894,11 +1084,21 @@ function dibujar() {
     const habla = dia.burbujas.some((b) => b.v === i);
     dibujarPersona(vx, vy, -Math.PI / 2 + (habla ? 0.12 * Math.sin(performance.now() / 120) : 0), {
       ropa: C.acero, piel: PIEL[(i + 3) % PIEL.length], pelo: PELO[(i + 2) % PELO.length], sentado: true, telefono: true });
+    if (habla && !reducirMovimiento) {                      // ondas del teléfono que suena
+      const f = (performance.now() / 600) % 1;
+      ctx.strokeStyle = C.acero; ctx.lineWidth = 1.6; ctx.globalAlpha = 1 - f;
+      ctx.beginPath(); ctx.arc(vx, vy, (13 + f * 9) * P.esc, -2.5, -0.65); ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
   });
 
   // Tablero de pedidos pendientes (la cola) y bandeja de hojas por recoger
   const t = P.tablero;
   sala(t, 'Pedidos pendientes');
+  if (dia.cola.some((id) => dia.pedidos.get(id).perdio)) {
+    rect(t.x, t.y, t.w, t.h, 6); ctx.strokeStyle = C.rojo; ctx.lineWidth = 2.5;
+    ctx.globalAlpha = reducirMovimiento ? 1 : 0.55 + 0.45 * Math.sin(performance.now() / 260); ctx.stroke(); ctx.globalAlpha = 1;
+  }
   const [bx, by, bw, bh] = t.bandejaRect;
   rect(bx, by, bw, bh, 3); ctx.fillStyle = C.suelo; ctx.fill(); ctx.strokeStyle = C.control; ctx.lineWidth = 1; ctx.stroke();
   const fuera = dia.cola.length - capacidadTablero();
@@ -911,6 +1111,8 @@ function dibujar() {
   const cm = P.comedor;
   sala(cm, cm.w < 120 ? 'Comedor' : 'Comedor y vestuario');
   rect(...cm.mesa, 4); ctx.fillStyle = C.carton; ctx.globalAlpha = 0.45; ctx.fill(); ctx.globalAlpha = 1;
+  ctx.fillStyle = '#f4f3ef'; ctx.strokeStyle = C.control; ctx.lineWidth = 1;
+  cm.asientos.forEach(([x, y, a]) => { ctx.beginPath(); ctx.arc(x + Math.cos(a) * 17 * P.esc, y + Math.sin(a) * 17 * P.esc, 4.5, 0, 2 * Math.PI); ctx.fill(); ctx.stroke(); });
   const [pa, pb] = cm.puerta;                               // vano de la puerta
   ctx.strokeStyle = C.fondo; ctx.lineWidth = 4; ctx.beginPath();
   if (pa[0] !== pb[0]) { ctx.moveTo(cm.x + cm.w, pa[1] - 10); ctx.lineTo(cm.x + cm.w, pa[1] + 10); }
@@ -926,6 +1128,9 @@ function dibujar() {
   ctx.save();
   ctx.beginPath(); ctx.rect(...P.anden.clip); ctx.clip();
   [0, 1, 2].forEach(dibujarCamion);
+  ctx.fillStyle = '#8a8f8c';
+  dia.humo.forEach((h) => { ctx.globalAlpha = (h.vida / 0.9) * 0.35; circulo(h.x, h.y, 3 + (0.9 - h.vida) * 12); });
+  ctx.globalAlpha = 1;
   ctx.restore();
   dia.flota.forEach((c, k) => {
     const b = P.anden.bahias[k], enCamion = c.fase === 'volviendo' ? 0 : Math.min(c.carga, CARGA_VIAJE);
@@ -938,18 +1143,27 @@ function dibujar() {
 
   for (const p of dia.pedidos.values()) dibujarHoja(p);
 
+  const foco = dia.hover ?? dia.sel;
+  if (foco !== null && foco < dia.personas.length) dibujarFoco(foco);
   // Despachadores, de arriba hacia abajo para que se superpongan bien
   [...dia.personas.keys()].sort((a, b) => dia.personas[a].y - dia.personas[b].y).forEach((k) => {
     const per = dia.personas[k], tr = per.trabajo, tramo = tr && tr.tramos[tr.fase];
     const accion = tramo && (tramo.tipo === 'recoger' || tramo.tipo === 'empacar');
     const sentado = !per.activo && !per.ruta.length && per.lugar.sentado;
-    dibujarPersona(per.x, per.y, per.ang, {
+    const libre = per.activo && !tr && !per.ruta.length;     // libre en su mesa: mira a su alrededor
+    dibujarPersona(per.x, per.y, per.angVis + (libre ? 0.4 * Math.sin(dia.t * 0.2 + k * 1.7) : 0), {
       ropa: '#ec7a1c', chaleco: true, piel: per.piel, pelo: per.pelo, camina: per.camina, paso: per.paso,
-      carga: per.carga, accion, t: dia.t * 0.8, sentado,
+      carga: per.carga, accion, sentado, come: sentado, t: sentado ? dia.t * 0.7 + k : dia.t * 0.8,
       etiqueta: sentado ? null : `D${k + 1}`, etiquetaFondo: per.activo || tr ? C.acero : C['tinta-2'],
     });
+    if (tramo && tramo.tipo === 'recoger') dibujarRecogida(per, tramo, tr.id);
   });
   dia.burbujas.forEach(dibujarBurbuja);
+  // Después de las 18:00 baja la luz: son horas extra
+  if (dia.t > S.CIERRE) {
+    ctx.fillStyle = '#0b1630'; ctx.globalAlpha = Math.min(1, (dia.t - S.CIERRE) / 20) * 0.2;
+    ctx.fillRect(0, 0, P.W, P.H); ctx.globalAlpha = 1;
+  }
 
   // Reloj de pared
   const r = P.reloj;
@@ -961,6 +1175,8 @@ function dibujar() {
   ctx.fillText(dia.t >= 600 ? 'Horas extra: se despacha lo pendiente' : `Llegan ~${(S.LAMBDA[h] * (1 + estado.crec / 100)).toFixed(1)} pedidos por hora`, r.textoX, r.y1);
   ctx.fillStyle = C['tinta-2'];
   ctx.fillText(`${dia.cola.length} pendiente${dia.cola.length === 1 ? '' : 's'} en el tablero`, r.textoX, r.y2);
+  dibujarAvisos();
+  if (foco !== null && foco < dia.personas.length) dibujarFicha(foco);
 }
 
 function pintarContadores() {
@@ -999,6 +1215,19 @@ $('reiniciar').addEventListener('click', () => nuevoDia());
 $('otroDia').addEventListener('click', () => { semillaDia++; nuevoDia(); ponerReproduccion(true); });
 $('velocidad').addEventListener('change', (e) => { velocidad = Number(e.target.value); });
 pantallaChica.addEventListener('change', () => { configurarLienzo(); nuevoDia(); });
+function personaEn(e) {
+  const r = lienzo.getBoundingClientRect(), x = ((e.clientX - r.left) * P.W) / r.width, y = ((e.clientY - r.top) * P.H) / r.height;
+  let elegida = null, dmin = 22 * P.esc;
+  dia.personas.forEach((p, k) => { const d = Math.hypot(p.x - x, p.y - y); if (d < dmin) { dmin = d; elegida = k; } });
+  return elegida;
+}
+lienzo.addEventListener('pointermove', (e) => {
+  if (e.pointerType !== 'mouse') return;
+  dia.hover = personaEn(e);
+  lienzo.style.cursor = dia.hover === null ? '' : 'pointer';
+});
+lienzo.addEventListener('pointerleave', () => { dia.hover = null; lienzo.style.cursor = ''; });
+lienzo.addEventListener('click', (e) => { const k = personaEn(e); dia.sel = k === dia.sel ? null : k; });
 
 // Una frase que cuenta en palabras lo que se ve en el almacén
 function narrar() {
