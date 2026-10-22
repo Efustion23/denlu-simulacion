@@ -51,8 +51,12 @@
           <input type="range" id="aus" min="0" max="20" step="1" value="0">
         </label>
         <label class="control">
-          <span>Quiebres de stock <output id="vQ"></output></span>
-          <input type="range" id="q" min="0" max="100" step="5" value="0">
+          <span>Espera máxima antes de perder la ruta <output id="vT"></output></span>
+          <input type="range" id="T" min="5" max="60" step="1" value="20">
+        </label>
+        <label class="control">
+          <span>Probabilidad de cancelar tras perderla <output id="vP"></output></span>
+          <input type="range" id="p" min="0" max="1" step="0.01" value="0.28">
         </label>
       </details>
 
@@ -82,8 +86,8 @@
 
       <ol class="guia" aria-label="Cómo usar el simulador">
         <li><strong>Elige el personal</strong> Cuántos despachadores entran en cada turno.</li>
-        <li><strong>Mira un día</strong> Los pedidos llegan, esperan y salen en tres camiones.</li>
-        <li><strong>Compara el año</strong> Camiones perdidos, esperas y costos frente a hoy.</li>
+        <li><strong>Mira un día</strong> Los pedidos llegan, esperan y salen en camión.</li>
+        <li><strong>Compara el año</strong> Cancelaciones, esperas y costos frente a hoy.</li>
       </ol>
 
       <dl class="kpis" id="kpis" aria-label="Resumen del año simulado"></dl>
@@ -101,9 +105,8 @@
         <p class="narracion" id="narracion"></p>
         <div class="lienzo"><canvas id="lienzo" role="img" aria-label="Vista del almacén: cola de pedidos, despachadores y andén de carga"></canvas></div>
         <ul class="leyenda" aria-label="Qué significa cada cosa">
-          <li><span class="sw sw-caja"></span><span>Pedido esperando (la barra amarilla es el margen que le queda para alcanzar su camión)</span></li>
-          <li><span class="sw sw-perdio"></span><span>Ya no llega a su camión: saldrá en el siguiente</span></li>
-          <li><span class="sw sw-quiebre"></span><span>Sin stock: se entrega cuando llegue la reposición</span></li>
+          <li><span class="sw sw-caja"></span><span>Pedido esperando (la barra amarilla es su espera)</span></li>
+          <li><span class="sw sw-perdio"></span><span>Esperó más de <strong id="leyendaT">20</strong> min y perdió su camión</span></li>
           <li><span class="sw sw-cancelo"></span><span>El cliente canceló</span></li>
           <li><span class="sw sw-desp"></span><span>Despachador trabajando</span></li>
           <li><span class="sw sw-fuera"></span><span>Puesto vacío (almuerzo o fuera de turno)</span></li>
@@ -141,14 +144,13 @@
       <section class="bloque" aria-labelledby="tBase">
         <div class="bloque-cab">
           <h2 id="tBase">Punto de partida: 2025</h2>
-          <span class="estado">3 despachadores fijos, 8 012 pedidos, S/ 1.82 millones de venta perdida</span>
+          <span class="estado">3 despachadores fijos, 8 012 pedidos</span>
         </div>
-        <p class="nota-bloque">El modelo parte de los pedidos de 2025 y reproduce sus totales: espera media de 11.4 min, 5.3 % de pedidos que pierden su camión y 5.8 % que se cancelan. Con 3 despachadores ninguna hora llega a ρ = 1, aunque a las 9, 10 y 15 h se supera el objetivo de 0.85 (barras amarillas). Del dinero perdido, solo el 0.5 % se debe al despacho: la mayor parte viene de quiebres de stock y del calendario de camiones.</p>
+        <p class="nota-bloque">El modelo parte del diagnóstico de 2025 y se calibró para reproducir sus totales: 36 % de pedidos pierden su ruta y 10 % se cancelan. A las 9 y 10 h la utilización supera 1: la cola crece sin límite (barras rojas). Hora por hora el ajuste es parcial: la simulación arrastra la cola del pico hasta el mediodía, y el histórico no.</p>
         <div class="graficos-base">
           <div class="grafico"><canvas id="gRho" aria-label="Utilización de los 3 despachadores actuales por hora"></canvas></div>
-          <div class="grafico"><canvas id="gValEspera" aria-label="Espera por hora: datos de 2025 frente a simulada"></canvas></div>
-          <div class="grafico"><canvas id="gValPerdida" aria-label="Pedidos que pierden su camión por hora: datos de 2025 frente a simulada"></canvas></div>
-          <div class="grafico"><canvas id="gCausas" aria-label="Venta perdida de 2025 por causa"></canvas></div>
+          <div class="grafico"><canvas id="gValEspera" aria-label="Espera por hora: histórico 2025 frente a simulada"></canvas></div>
+          <div class="grafico"><canvas id="gValPerdida" aria-label="Pérdida de ruta por hora: histórico 2025 frente a simulada"></canvas></div>
         </div>
       </section>
 

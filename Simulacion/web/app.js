@@ -2,19 +2,17 @@
 const S = Simulacion;
 const $ = (id) => document.getElementById(id);
 
-const INICIAL = { crec: 0, aus: 0, q: 0, margen: 100, hx: Number(S.COSTO_HORA_EXTRA.toFixed(2)) };
+const INICIAL = { crec: 0, aus: 0, T: S.T_CAL, p: S.P_CAL, margen: 100, hx: Number(S.COSTO_HORA_EXTRA.toFixed(2)) };
 const estado = { plan: { ...S.PLANES.rho85.plan }, preset: 'rho85', ...INICIAL };
-// q = reducción de los quiebres de stock respecto de 2025 (0 % = como hoy)
-const escenario = () => ({ crecimiento: estado.crec / 100, ausentismo: estado.aus / 100, qQuiebre: 1 - estado.q / 100,
+const escenario = () => ({ crecimiento: estado.crec / 100, ausentismo: estado.aus / 100, T: estado.T, p: estado.p,
   margen: estado.margen / 100, costoHoraExtra: estado.hx });
 const totalPersonas = (plan) => Object.values(plan).reduce((a, b) => a + b, 0);
 
-const soles = (v) => (v < 0 ? '−S/ ' : 'S/ ') + Math.abs(Math.round(v)).toLocaleString('es-PE');
+const soles = (v) => 'S/ ' + Math.round(v).toLocaleString('es-PE');
 const reloj = (min) => {
   const m = Math.floor(min) + 8 * 60;
   return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
 };
-const NOMBRES_DIA = ['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
 
 let C = {};
 function leerColores() {
@@ -92,11 +90,9 @@ function cambioPlan() {
 }
 
 // [formato, ¿cambia la simulación del día?]. Margen y hora extra solo cambian la valoración.
-const quiebreHoy = 100 * S.P_QUIEBRE;
 const deslizadores = {
-  crec: [(v) => `+${v} %`, true], aus: [(v) => `${v} %`, true],
-  q: [(v) => (v === 0 ? `como hoy (${quiebreHoy.toFixed(1)} %)` : `−${v} % (${(quiebreHoy * (1 - v / 100)).toFixed(1)} %)`), true],
-  margen: [(v) => `${v} %`, false], hx: [(v) => `S/ ${Number(v).toFixed(2)}`, false],
+  crec: [(v) => `+${v} %`, true], aus: [(v) => `${v} %`, true], T: [(v) => `${v} min`, true],
+  p: [(v) => Number(v).toFixed(2), true], margen: [(v) => `${v} %`, false], hx: [(v) => `S/ ${Number(v).toFixed(2)}`, false],
 };
 for (const [id, [fmt, cambiaDia]] of Object.entries(deslizadores)) {
   $(id).addEventListener('input', () => {
@@ -188,10 +184,10 @@ function crearGraficos() {
   graficos.perdida = new Chart($('gPerdida'), {
     type: 'bar',
     data: { labels: etiquetasHora, datasets: [barra('Plan elegido', C['serie-plan']), barra('Situación actual', C['serie-actual'])] },
-    options: opcionesBase('Pedidos que pierden su camión por hora de llegada (%)'),
+    options: opcionesBase('Pedidos que pierden su ruta por hora de llegada (%)'),
   });
 
-  // Punto de partida: utilización de los 3 despachadores actuales, ajuste del modelo a 2025 y causas de la venta perdida
+  // Punto de partida: utilización de los 3 despachadores actuales y ajuste del modelo al histórico de 2025
   const opRho = opcionesBase('Utilización actual por hora (ρ)');
   opRho.plugins.legend.display = false;
   graficos.rho = new Chart($('gRho'), {
@@ -207,34 +203,13 @@ function crearGraficos() {
   });
   graficos.valEspera = new Chart($('gValEspera'), {
     type: 'bar',
-    data: { labels: etiquetasHora, datasets: [barra('Datos 2025', C.carton, S.HIST_ESPERA), barra('Simulado', C['serie-actual'])] },
+    data: { labels: etiquetasHora, datasets: [barra('Histórico 2025', C.carton, S.HIST_ESPERA), barra('Simulado', C['serie-actual'])] },
     options: opcionesBase('Espera: 2025 y simulada (min)'),
   });
   graficos.valPerdida = new Chart($('gValPerdida'), {
     type: 'bar',
-    data: { labels: etiquetasHora, datasets: [barra('Datos 2025', C.carton, S.HIST_PERDIDA_RUTA), barra('Simulado', C['serie-actual'])] },
-    options: opcionesBase('Pérdida de camión: 2025 y simulada (%)'),
-  });
-  const opCausas = opcionesBase('Venta perdida de 2025 por causa');
-  opCausas.indexAxis = 'y';
-  opCausas.scales.x.stacked = true; opCausas.scales.y.stacked = true;
-  opCausas.scales.x.beginAtZero = true; opCausas.scales.x.grid = { color: C.linea }; opCausas.scales.y.display = false;
-  opCausas.scales.x.ticks.callback = (v) => `${v / 1000} mil`;
-  opCausas.plugins.legend.position = 'bottom';
-  opCausas.plugins.tooltip.callbacks = { label: (it) => `${it.dataset.label}: ${soles(it.parsed.x)}` };
-  const totalCausas = Object.values(S.CAUSAS_2025).reduce((a, b) => a + b, 0);
-  const etiquetaCausa = (nombre, v) => `${nombre} ${Math.round((100 * v) / totalCausas * 10) / 10} %`;
-  graficos.causas = new Chart($('gCausas'), {
-    type: 'bar',
-    data: {
-      labels: ['2025'],
-      datasets: [
-        { label: etiquetaCausa('Quiebre de stock', S.CAUSAS_2025.quiebre), data: [S.CAUSAS_2025.quiebre], backgroundColor: C.seguridad, borderRadius: 2 },
-        { label: etiquetaCausa('Calendario', S.CAUSAS_2025.calendario), data: [S.CAUSAS_2025.calendario], backgroundColor: C.carton, borderRadius: 2 },
-        { label: etiquetaCausa('Despacho', S.CAUSAS_2025.despacho), data: [S.CAUSAS_2025.despacho], backgroundColor: C.acero, borderRadius: 2 },
-      ],
-    },
-    options: opCausas,
+    data: { labels: etiquetasHora, datasets: [barra('Histórico 2025', C.carton, S.HIST_PERDIDA), barra('Simulado', C['serie-actual'])] },
+    options: opcionesBase('Pérdida de ruta: 2025 y simulada (%)'),
   });
 
   actualizarCobertura();
@@ -292,18 +267,12 @@ function programarAnio() {
 
 function pintarAnio() {
   const { plan, actual } = resultados;
-  const pct1 = (v) => v.toFixed(1) + ' %', pct2 = (v) => v.toFixed(2) + ' %', min1 = (v) => v.toFixed(1) + ' min';
   const filas = [
-    ['Espera media', 'espera', min1],
-    ['Pedidos que pierden su camión', 'perdida', pct1],
-    ['Entregas tardías (más de 24 h)', 'tardias', pct1],
-    ['Pedidos cancelados', 'cancelados', pct2],
-    ['Clientes perdidos', 'clientesPerdidos', pct2],
+    ['Espera media', 'espera', (v) => v.toFixed(1) + ' min'],
+    ['Pedidos que pierden su ruta', 'perdida', (v) => v.toFixed(1) + ' %'],
+    ['Pedidos cancelados', 'cancelados', (v) => v.toFixed(2) + ' %'],
     ['Horas extra al año', 'horasExtra', (v) => v.toFixed(0) + ' h'],
-    ['Venta perdida al año', 'ventaPerdida', soles, 'grupo'],
-    ['por quiebre de stock', 'ventaQuiebre', soles, 'sub'],
-    ['por calendario de camiones', 'ventaCalendario', soles, 'sub'],
-    ['por despacho', 'ventaDespacho', soles, 'sub'],
+    ['Venta perdida al año (precio de venta)', 'ventaPerdida', soles],
     // Con margen 100 % el margen perdido es la misma cifra que la venta perdida: no se repite
     ...(estado.margen < 100 ? [[`Margen perdido al año (${estado.margen} %)`, 'margenPerdido', soles]] : []),
     ['Planilla al año', 'planilla', soles],
@@ -312,59 +281,60 @@ function pintarAnio() {
   ];
   const celda = (r, k, fmt) => `<td class="cifra">${fmt(r[k])}${r[k + 'IC'] ? `<span class="ic">± ${fmt(r[k + 'IC'])}</span>` : ''}</td>`;
   const marca = (c) => `<span class="marca-serie" style="background:${c}"></span>`;
-  // Si la diferencia se redondea a cero al mostrarla, no lleva signo (evita "−0.0 %")
-  const signo = (d, fmt) => { const t = fmt(Math.abs(d)); return `${Number(t.replace(/[^0-9.]/g, '')) === 0 ? '' : d > 0 ? '+' : '−'}${t}`; };
+  const signo = (d, fmt) => `${d > 0 ? '+' : d < 0 ? '−' : ''}${fmt(Math.abs(d))}`;
   $('resultados').innerHTML = `
     <thead><tr><th>Indicador</th><th>${marca(C['serie-plan'])}Plan elegido</th><th>${marca(C['serie-actual'])}Situación actual</th><th>Diferencia</th></tr></thead>
     <tbody>${filas.map(([nombre, k, fmt, clase = '']) => {
       const d = plan[k] - actual[k];
-      // Solo importa si la diferencia es mayor que el ruido de la simulación (intervalo de confianza)
-      const tono = Math.abs(d) < Math.max(1e-9, (plan[k + 'IC'] || 0) * 0.5) ? '' : d < 0 ? 'mejor' : 'peor';
+      const tono = Math.abs(d) < 1e-9 ? '' : d < 0 ? 'mejor' : 'peor';
       return `<tr class="${clase}"><td>${nombre}</td>${celda(plan, k, fmt)}${celda(actual, k, fmt)}<td class="cifra ${tono}">${signo(d, fmt)}</td></tr>`;
     }).join('')}</tbody>`;
   $('resultados').setAttribute('aria-busy', 'false');
 
-  // Resumen: la cifra que el personal sí controla (pedidos que pierden su camión) va primero y más grande
+  // Resumen: la cifra que responde la pregunta de la pantalla (¿cuántos pedidos se cancelan?) va primero y más grande
   const kpi = (etiqueta, valor, pie, lider = false) =>
     `<div class="${lider ? 'lider' : ''}"><dt>${etiqueta}</dt><dd>${valor}</dd><span class="pie">${pie}</span></div>`;
-  const dif = (d, fmt, ruido = 1e-9) => `<span class="${Math.abs(d) < ruido ? '' : d < 0 ? 'bien' : 'mal'}">${signo(d, fmt)}</span>`;
+  const dif = (d, fmt) => `<span class="${Math.abs(d) < 1e-9 ? '' : d < 0 ? 'bien' : 'mal'}">${signo(d, fmt)}</span>`;
+  const pct2 = (v) => v.toFixed(2) + ' %', min1 = (v) => v.toFixed(1) + ' min';
   $('kpis').innerHTML = [
-    kpi('Pedidos que pierden su camión', pct1(plan.perdida), `${dif(plan.perdida - actual.perdida, pct1, plan.perdidaIC / 2)} frente a la situación actual (${pct1(actual.perdida)})`, true),
-    kpi('Espera promedio de un pedido', min1(plan.espera), `${dif(plan.espera - actual.espera, min1, plan.esperaIC / 2)} frente a la situación actual`),
-    kpi('Venta perdida al año', soles(plan.ventaPerdida), `${soles(plan.ventaDespacho)} por despacho; el resto, quiebres y calendario`),
+    kpi('Pedidos que se cancelan', pct2(plan.cancelados), `${dif(plan.cancelados - actual.cancelados, pct2)} frente a la situación actual (${pct2(actual.cancelados)})`, true),
+    kpi('Espera promedio de un pedido', min1(plan.espera), `${dif(plan.espera - actual.espera, min1)} frente a la situación actual`),
+    kpi('Costo total al año', soles(plan.costoTotal), `${dif(plan.costoTotal - actual.costoTotal, soles)} frente a la situación actual`),
     kpi('Planilla al mes', soles(S.costoMensual(estado.plan)), `${totalPersonas(estado.plan)} despachadores`),
   ].join('');
   $('kpis').setAttribute('aria-busy', 'false');
-  $('ayuda').textContent = 'Cada pedido se asigna al primer camión (10:00, 13:00 o 16:00) que alcanza con su tiempo de preparación; si la cola lo retrasa y no está listo a la salida, pierde ese camión. '
-    + 'La venta perdida tiene tres causas: quiebres de stock, calendario (pedidos que llegan tarde o en sábado) y despacho. Solo la última depende del personal. Todo se compara con hoy: 3 despachadores fijos.';
+  $('ayuda').textContent = `Un pedido que espera más de ${estado.T} min pierde su camión y, a veces, el cliente cancela. `
+    + `El costo total suma la planilla, las horas extra y lo que se deja de vender. Todo se compara con hoy: 3 despachadores fijos.`;
 
   const plural = (n) => `${n} despachador${n === 1 ? '' : 'es'}`;
-  $('hallazgo').innerHTML = `Con este plan <strong>${pct1(plan.perdida)}</strong> de los pedidos pierde su camión (hoy ${pct1(actual.perdida)}) `
+  $('hallazgo').innerHTML = `Con este plan se cancela el <strong>${pct2(plan.cancelados)}</strong> de los pedidos (hoy ${pct2(actual.cancelados)}) `
     + `y cada uno espera <strong>${min1(plan.espera)}</strong> en promedio.`;
 
-  // Aviso: la hora en que el plan elegido pierde más camiones, si es grave
+  // Aviso: la hora en que el plan elegido pierde más rutas, si es grave
   const peor = plan.porHora.reduce((m, h, i) => (h.perdida > plan.porHora[m].perdida ? i : m), 0);
   const perdida = plan.porHora[peor].perdida, perdidaHoy = actual.porHora[peor].perdida;
   const enTurno = S.personalPorHora(estado.plan)[peor];
   const alerta = $('alerta');
-  alerta.hidden = perdida < 8 || perdida < perdidaHoy + 2;
+  alerta.hidden = perdida < 15;
   if (!alerta.hidden) {
-    const hoy = S.personalPorHora(S.PLANES.actual.plan)[peor];
-    const motivo = enTurno < hoy ? ` Hoy hay ${plural(hoy)} a esa hora; este plan cubre solo lo que pide ρ ≤ 0.85 y la cola se arrastra.` : '';
-    alerta.innerHTML = `<strong>A las ${S.HORAS[peor]}:00 el plan pierde más camiones que la situación actual</strong>${perdida.toFixed(0)} % de los pedidos que llegan a esa hora pierde su camión (hoy ${perdidaHoy.toFixed(0)} %) con ${plural(enTurno)} en turno.${motivo}`;
+    const titulo = perdida > perdidaHoy + 5 ? `A las ${S.HORAS[peor]}:00 el plan es peor que la situación actual` : `Hora más débil: ${S.HORAS[peor]}:00`;
+    const motivo = enTurno === 1
+      ? ` Con un solo despachador, un pedido que llega con él ocupado espera un servicio completo (${S.MU_MIN} min), más que los ${estado.T} min de espera máxima: cumplir ρ ≤ 0.85 no basta con un solo servidor.`
+      : ` Hay ${plural(enTurno)} en turno y no alcanzan para la demanda de esa hora.`;
+    alerta.innerHTML = `<strong>${titulo}</strong>${perdida.toFixed(0)} % de los pedidos pierde su ruta (hoy ${perdidaHoy.toFixed(0)} %) con ${plural(enTurno)} en turno.${motivo}`;
   }
 
-  // Inversión = planilla + horas extra; lo recuperado es la venta perdida por despacho, valorada al margen elegido
+  // Inversión = planilla + horas extra; lo recuperado se valora al margen bruto elegido
   const inversion = plan.planilla + plan.costoHorasExtra - actual.planilla - actual.costoHorasExtra;
-  const recuperado = (actual.ventaDespacho - plan.ventaDespacho) * (estado.margen / 100);
-  const neto = recuperado - inversion;
-  const sinPersonal = ((plan.ventaQuiebre + plan.ventaCalendario) / plan.ventaPerdida) * 100;
-  const cola = ` El ${sinPersonal.toFixed(sinPersonal > 99 ? 1 : 0)} % de la venta perdida (${soles(plan.ventaQuiebre + plan.ventaCalendario)}) viene de quiebres de stock y del calendario de camiones: ningún plan de personal la recupera.`;
+  const recuperado = actual.margenPerdido - plan.margenPerdido;
+  const beneficio = recuperado - inversion;
+  const pctRec = (100 * recuperado) / actual.margenPerdido;
+  const que = estado.margen === 100 ? 'en ventas' : `de margen bruto (margen de ${estado.margen} %)`;
   $('roi').textContent = Math.abs(inversion) < 1 && Math.abs(recuperado) < 1
     ? 'Es el mismo plan que la situación actual.'
     : inversion > 0
-      ? `Este plan cuesta ${soles(inversion)} más al año en planilla y horas extra y recupera ${soles(recuperado)} de venta ligada al despacho: ${neto >= 0 ? 'se paga' : 'no se paga'} (resultado neto ${soles(neto)} al año).${cola}`
-      : `Este plan ahorra ${soles(-inversion)} al año en planilla y horas extra y cambia la venta ligada al despacho en ${soles(recuperado)}: efecto neto ${soles(neto)} al año.${cola}`;
+      ? `Este plan cuesta ${soles(inversion)} más al año en planilla y horas extra, y recupera ${soles(recuperado)} ${que}, el ${pctRec.toFixed(0)} % de lo que hoy se pierde. Beneficio neto: ${soles(beneficio)} al año, un retorno de ${Math.round((100 * beneficio) / inversion).toLocaleString('es-PE')} %.`
+      : `Este plan ahorra ${soles(-inversion)} al año en planilla y horas extra, y cambia lo perdido ${que} en ${soles(-recuperado)}. Efecto neto: ${soles(beneficio)} al año.`;
 
   if (!window.Chart) return;
   graficos.espera.data.datasets[0].data = plan.porHora.map((h) => h.espera);
@@ -377,7 +347,7 @@ function pintarAnio() {
 
 /* ---------- Animación de un día ---------- */
 
-const CAJA = 24, CAJA_CHICA = 18, MAX_CARGA = 6;
+const CAJA = 24, CARGA_VIAJE = 6, CAJA_CHICA = 18;
 const lienzo = $('lienzo'), ctx = lienzo.getContext('2d');
 const dpr = window.devicePixelRatio || 1;
 const pantallaChica = matchMedia('(max-width: 700px)');
@@ -391,20 +361,18 @@ const GEOMETRIAS = {
     cola: { frenteX: 520, paso: 34, porFila: 14, filasY: [0, 40, -40, 80, -80], y0: 190, xMin: 28, xMax: 548 },
     est: { x: 590, y: 40, w: 170, h: 345, cols: 1, sep: 0, altoMax: 46 },
     franjas: [[566, 0, 8, 430], [784, 0, 8, 430]],
-    camion: { x: 812, y0: 52, paso: 98, esc: 1, enFila: false, dir: [1, 0], clip: [792, 0, 168, 430], texto: 12 },
-    bahias: [{ x: 812, y: 354, w: 68, h: 46, tipo: 'manana', texto: 'Mañana' }, { x: 888, y: 354, w: 68, h: 46, tipo: 'stock', texto: 'Sin stock' }],
-    etiquetas: [['Cola de pedidos', 20, 416], ['Despachadores', 590, 416], ['Camiones', 812, 416]],
+    camion: { x: 812, y0: 62, paso: 110, esc: 1, enFila: false, dir: [1, 0], clip: [792, 0, 168, 430], texto: 13 },
+    etiquetas: [['Cola de pedidos', 20, 416], ['Despachadores', 590, 416], ['Andén de carga', 812, 416]],
     losas: true, flecha: 202, texto: 13,
   },
   angosto: {
-    W: 420, H: 600,
+    W: 420, H: 560,
     reloj: { x: 12, y: 10, w: 112, h: 50, fuente: 36, textoX: 138, y1: 26, y2: 46, texto: 13 },
     cola: { frenteX: 376, paso: 36, porFila: 9, filasY: [0, 40, 80], y0: 96, xMin: 32, xMax: 408 },
     est: { x: 12, y: 262, w: 396, h: 150, cols: 2, sep: 10, altoMax: 40 },
     franjas: [[0, 222, 420, 8], [0, 424, 420, 8]],
-    camion: { x: 12, y0: 490, paso: 102, esc: 0.62, enFila: true, dir: [0, 1], clip: [0, 434, 420, 166], texto: 12 },
-    bahias: [{ x: 12, y: 548, w: 196, h: 42, tipo: 'manana', texto: 'Mañana' }, { x: 216, y: 548, w: 192, h: 42, tipo: 'stock', texto: 'Sin stock' }],
-    etiquetas: [['Cola de pedidos', 12, 80], ['Despachadores', 12, 250], ['Camiones', 12, 456]],
+    camion: { x: 12, y0: 490, paso: 102, esc: 0.62, enFila: true, dir: [0, 1], clip: [0, 434, 420, 126], texto: 12 },
+    etiquetas: [['Cola de pedidos', 12, 80], ['Despachadores', 12, 250], ['Andén de carga', 12, 456]],
     losas: false, flecha: 108, texto: 13,
   },
 };
@@ -432,8 +400,8 @@ const posEstacion = (k) => {
   const t = tarjeta(k);
   return [t.x + t.w - CAJA - 10, t.y + (t.alto - 6 - CAJA) / 2];
 };
-// Cada camión es una salida del día (10:00, 13:00 y 16:00): carga lo que sale listo y se va a su hora.
-// Los pedidos que no alcanzan su camión van al siguiente, o a la bahía "Mañana"; los de quiebre esperan en "Sin stock".
+// Cada camión lleva 6 cajas por viaje (3 × 2 en la tolva): al llenarse sale, se vacía y vuelve.
+// Es solo visual: la pérdida de ruta del modelo depende de la espera máxima T, no de estos viajes.
 const baseCamion = (k) => { const c = G.camion; return c.enFila ? [c.x + k * c.paso, c.y0] : [c.x, c.y0 + k * c.paso]; };
 const origenCamion = (k) => {
   const [x, y] = baseCamion(k), d = dia.flota[k].d, [ux, uy] = G.camion.dir;
@@ -443,34 +411,28 @@ const posCarga = (k, i) => {
   const [ox, oy] = origenCamion(k), e = G.camion.esc;
   return [ox + e * (12 + (i % 3) * 28), oy + e * (18 + Math.floor(i / 3) * 22)];
 };
-const posBahia = (tipo) => {
-  const b = G.bahias.find((x) => x.tipo === tipo);
-  return [b.x + b.w / 2 - CAJA_CHICA / 2, b.y + 20];
-};
-const horaSalida = (k) => reloj(S.SALIDAS[k]);
 
 let dia = null, semillaDia = 1, reproduciendo = false, velocidad = 15, ultimoMs = null;
 const reducirMovimiento = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 function nuevoDia() {
   const seguia = reproduciendo;
-  const diaSemana = (semillaDia - 1) % 6;                      // lunes a sábado
   const rng = S.crearRng(104729 * semillaDia + 17);
   const presentes = S.presentesDelDia(estado.plan, estado.aus / 100, rng);
   const personal = S.personalPorHora(presentes);
   const log = [];
   if (totalPersonas(estado.plan)) {
-    S.simularDia(personal, S.generarDia(rng, diaSemana, estado.crec / 100, 1 - estado.q / 100), diaSemana, log);
+    S.simularDia(personal, S.LAMBDA.map((l) => l * (1 + estado.crec / 100)), estado.T, estado.p, rng, log);
   }
   dia = {
-    log, i: 0, t: 0, fin: log.length ? log[log.length - 1].t : 0, cap: Math.max(1, ...personal), diaSemana,
+    log, i: 0, t: 0, fin: log.length ? log[log.length - 1].t : 0, cap: Math.max(1, ...personal),
     pedidos: new Map(), cola: [], estaciones: Array.from({ length: Math.max(1, ...personal) }, () => ({ activa: true, pedido: null })),
-    flota: S.SALIDAS.map(() => ({ carga: 0, enCamino: 0, d: 0, fase: 'carga', salir: false, llevo: 0, vel: 0 })),
-    bahia: { manana: 0, stock: 0 }, ultimaSalida: null, faltaron: totalPersonas(estado.plan) - totalPersonas(presentes),
-    cont: { llegados: 0, despachados: 0, perdieron: 0, cancelados: 0, clientes: 0, venta: 0, espera: 0, nEspera: 0 },
+    flota: [0, 1, 2].map(() => ({ carga: 0, enCamino: 0, d: 0, fase: 'anden', viajes: 0 })), faltaron: totalPersonas(estado.plan) - totalPersonas(presentes),
+    cont: { llegados: 0, despachados: 0, perdieron: 0, cancelados: 0, espera: 0, nEspera: 0 },
     serie: { cola: [], turno: [] }, minuto: -1, servicios: log.filter((e) => e.tipo === 'inicio'),
   };
   avanzar(0);
+  $('leyendaT').textContent = estado.T;
   ponerReproduccion(seguia && log.length > 0);
   if (graficos.dia) {
     graficos.dia.options.scales.x.max = Math.max(660, Math.ceil(dia.fin / 60) * 60);
@@ -486,32 +448,31 @@ function aplicar(ev) {
   const sacarDeCola = () => d.cola.splice(d.cola.indexOf(ev.id), 1);
   if (ev.tipo === 'llegada') {
     const [, y] = posCola(d.cola.length);
-    d.pedidos.set(ev.id, { llegada: ev.t, x: -CAJA, y, estado: 'cola', perdio: false, alfa: 1, quiebre: ev.quiebre, holgura: ev.holgura });
+    d.pedidos.set(ev.id, { llegada: ev.t, x: -CAJA, y, estado: 'cola', perdio: false, alfa: 1 });
     d.cola.push(ev.id);
     d.cont.llegados++;
   } else if (ev.tipo === 'perdio') {
-    if (!p.perdio) { p.perdio = true; d.cont.perdieron++; }
+    p.perdio = true; d.cont.perdieron++;
   } else if (ev.tipo === 'cancela') {
     sacarDeCola();
     Object.assign(p, { estado: 'cancelado', ty: p.y - 46 });
-    d.cont.cancelados++; d.cont.venta += ev.monto;
+    d.cont.cancelados++; d.cont.espera += ev.t - p.llegada; d.cont.nEspera++;
   } else if (ev.tipo === 'inicio') {
     sacarDeCola();
     Object.assign(p, { estado: 'servicio', est: ev.est, inicio: ev.t, dur: ev.dur });
     d.estaciones[ev.est].pedido = ev.id;
     d.cont.espera += ev.t - p.llegada; d.cont.nEspera++;
   } else if (ev.tipo === 'fin') {
-    if (ev.perdio && !p.perdio) { p.perdio = true; d.cont.perdieron++; }
-    if (ev.perdido) { d.cont.clientes++; d.cont.venta += 2 * ev.monto; }
-    const destino = ev.quiebre ? 'stock' : ev.camion >= 0 ? ev.camion : 'manana';
-    let slot = 0;
-    if (typeof destino === 'number') { const c = d.flota[destino]; slot = Math.min(MAX_CARGA - 1, c.carga + c.enCamino); c.enCamino++; }
-    Object.assign(p, { estado: 'listo', destino, desde: [p.x, p.y], prog: 0, slot });
+    // Se llena un camión a la vez: el del andén con más carga que todavía tiene espacio
+    const ocupado = (k) => d.flota[k].carga + d.flota[k].enCamino;
+    const conEspacio = [0, 1, 2].filter((k) => d.flota[k].fase === 'anden' && ocupado(k) < CARGA_VIAJE);
+    const k = conEspacio.length
+      ? conEspacio.reduce((a, b) => (ocupado(b) > ocupado(a) ? b : a))
+      : [0, 1, 2].reduce((a, b) => (ocupado(b) < ocupado(a) ? b : a));
+    Object.assign(p, { estado: 'listo', camion: k, desde: [p.x, p.y], prog: 0, slot: Math.min(CARGA_VIAJE - 1, d.flota[k].carga + d.flota[k].enCamino) });
+    d.flota[k].enCamino++;
     d.estaciones[ev.est].pedido = null;
     d.cont.despachados++;
-  } else if (ev.tipo === 'salida') {
-    d.flota[ev.camion].salir = true;
-    d.ultimaSalida = { k: ev.camion, t: ev.t };
   } else if (ev.tipo === 'sale') {
     d.estaciones[ev.est].activa = false;
   } else if (ev.tipo === 'turno') {
@@ -536,17 +497,17 @@ function mover(dt) {
   dia.cola.forEach((id, i) => { const p = dia.pedidos.get(id); [p.tx, p.ty] = posCola(i); });
   for (const [id, p] of dia.pedidos) {
     if (p.estado === 'listo') {
-      // Del puesto al camión (o a la bahía) en un arco (curva cuadrática) con salida rápida y llegada suave
+      // Del puesto al camión en un arco (curva cuadrática) con salida rápida y llegada suave
       p.prog = reducirMovimiento ? 1 : Math.min(1, p.prog + dt / 0.65);
       const e = 1 - (1 - p.prog) ** 3;
-      const [x0, y0] = p.desde, [x1, y1] = typeof p.destino === 'number' ? posCarga(p.destino, p.slot) : posBahia(p.destino);
+      const [x0, y0] = p.desde, [x1, y1] = posCarga(p.camion, p.slot);
       const cx = (x0 + x1) / 2, cy = Math.min(y0, y1) - 70;
       p.x = (1 - e) ** 2 * x0 + 2 * (1 - e) * e * cx + e ** 2 * x1;
       p.y = (1 - e) ** 2 * y0 + 2 * (1 - e) * e * cy + e ** 2 * y1;
-      p.escala = 1 - e * (1 - (CAJA_CHICA * (typeof p.destino === 'number' ? G.camion.esc : 1)) / CAJA);
+      p.escala = 1 - e * (1 - (CAJA_CHICA * G.camion.esc) / CAJA);
       if (p.prog >= 1) {
-        if (typeof p.destino === 'number') { const c = dia.flota[p.destino]; c.enCamino--; c.carga++; }
-        else dia.bahia[p.destino]++;
+        const c = dia.flota[p.camion];
+        c.enCamino--; c.carga++;
         dia.pedidos.delete(id);
       }
       continue;
@@ -561,14 +522,19 @@ function mover(dt) {
   moverCamiones(dt);
 }
 
-// El camión sale a su hora (cuando termina de recibir las cajas que van en camino) y no vuelve ese día
+// El camión lleno arranca (acelera), se vacía fuera de la vista y vuelve frenando al andén
 function moverCamiones(dt) {
   for (const c of dia.flota) {
-    if (c.fase === 'carga' && c.salir && c.enCamino === 0) { c.fase = 'saliendo'; c.vel = 0; c.llevo = c.carga; }
-    if (reducirMovimiento && c.fase === 'saliendo') c.fase = 'ido';
+    if (c.fase === 'anden' && c.carga >= CARGA_VIAJE && c.enCamino === 0) {
+      c.fase = 'saliendo'; c.vel = 0; c.viajes++;
+    }
+    if (reducirMovimiento && c.fase !== 'anden') { c.fase = 'anden'; c.d = 0; c.carga = Math.max(0, c.carga - CARGA_VIAJE); continue; }
     if (c.fase === 'saliendo') {
       c.vel += 900 * dt; c.d += c.vel * dt;
-      if (c.d > 230) c.fase = 'ido';
+      if (c.d > 200) { c.fase = 'volviendo'; c.carga = Math.max(0, c.carga - CARGA_VIAJE); }   // lo que sobró espera el próximo viaje
+    } else if (c.fase === 'volviendo') {
+      c.d *= Math.exp(-dt * 5);
+      if (c.d < 0.5) { c.d = 0; c.fase = 'anden'; }
     }
   }
 }
@@ -578,22 +544,20 @@ function rect(x, y, w, h, r) {
   ctx.roundRect(x, y, w, h, r);
 }
 
-function cajaDibujo(x, y, lado, perdio, quiebre = false) {
+function cajaDibujo(x, y, lado, perdio) {
   rect(x, y, lado, lado, 3);
   ctx.fillStyle = C.carton; ctx.fill();
   ctx.lineWidth = perdio ? 2.5 : 1;
   ctx.strokeStyle = perdio ? C.rojo : C['carton-borde']; ctx.stroke();
   ctx.fillStyle = 'rgba(255,255,255,0.28)';               // cinta de embalaje
   ctx.fillRect(x + lado / 2 - lado * 0.1, y + 1, lado * 0.2, lado - 2);
-  if (quiebre) { ctx.fillStyle = C.seguridad; ctx.fillRect(x + 2, y + 2, lado - 4, Math.max(3, lado * 0.2)); }   // sin stock
 }
 
 function dibujarCaja(p) {
   ctx.globalAlpha = Math.max(0, p.alfa);
-  cajaDibujo(p.x, p.y, CAJA * (p.escala || 1), p.perdio, p.quiebre);
-  if (p.estado === 'cola' && p.holgura !== null && p.holgura !== undefined) {
-    // mecha: cuánto del margen para alcanzar su camión ya se consumió esperando; en rojo, ya no llega
-    const f = Math.min(1, (dia.t - p.llegada) / Math.max(1, p.holgura));
+  cajaDibujo(p.x, p.y, CAJA * (p.escala || 1), p.perdio);
+  if (p.estado === 'cola') {                               // mecha: cuánto de la espera máxima lleva
+    const f = Math.min(1, (dia.t - p.llegada) / estado.T);
     ctx.fillStyle = C.linea; ctx.fillRect(p.x, p.y + CAJA + 3, CAJA, 3);
     ctx.fillStyle = f >= 1 ? C.rojo : C.seguridad; ctx.fillRect(p.x, p.y + CAJA + 3, CAJA * f, 3);
   }
@@ -632,13 +596,7 @@ function dibujarCintas() {
 }
 
 function dibujarCamion(k) {
-  const c = dia.flota[k], [bx, by] = baseCamion(k), e = G.camion.esc;
-  if (c.fase === 'ido') {                                  // la plaza vacía: el camión ya salió
-    ctx.setLineDash([4, 3]); ctx.strokeStyle = C.control; ctx.lineWidth = 1;
-    rect(bx, by, 142 * e, 64 * e, 4); ctx.stroke(); ctx.setLineDash([]);
-    return;
-  }
-  const [ox, oy] = origenCamion(k);
+  const [ox, oy] = origenCamion(k), e = G.camion.esc, c = dia.flota[k];
   ctx.save();
   ctx.translate(ox, oy); ctx.scale(e, e);
   rect(0, 0, 104, 64, 4); ctx.fillStyle = C.fondo; ctx.fill();
@@ -647,10 +605,8 @@ function dibujarCamion(k) {
   ctx.fillStyle = C.fondo; ctx.fillRect(124, 24, 14, 14);
   ctx.fillStyle = C.tinta;
   for (const xr of [18, 84, 126]) { ctx.beginPath(); ctx.arc(xr, 68, 7, 0, 2 * Math.PI); ctx.fill(); }
-  for (let i = 0; i < Math.min(c.carga, MAX_CARGA); i++) cajaDibujo(12 + (i % 3) * 28, 18 + Math.floor(i / 3) * 22, CAJA_CHICA, false);
-  if (c.carga > MAX_CARGA) {
-    ctx.fillStyle = C['tinta-2']; ctx.font = '600 13px Barlow, sans-serif'; ctx.textBaseline = 'alphabetic';
-    ctx.fillText(`+${c.carga - MAX_CARGA}`, 76, 56);
+  if (c.fase !== 'volviendo') {
+    for (let i = 0; i < Math.min(c.carga, CARGA_VIAJE); i++) cajaDibujo(12 + (i % 3) * 28, 18 + Math.floor(i / 3) * 22, CAJA_CHICA, false);
   }
   ctx.restore();
 }
@@ -679,9 +635,8 @@ function dibujar() {
   ctx.fillStyle = C.fondo; ctx.font = `700 ${r.fuente}px "Barlow Condensed", sans-serif`; ctx.textBaseline = 'middle';
   ctx.fillText(reloj(dia.t), r.x + 12, r.y + r.h / 2 + 1);
   const h = Math.min(9, Math.floor(dia.t / 60));
-  const factor = S.FACTOR_DIA[dia.diaSemana] * (1 + estado.crec / 100);
   ctx.fillStyle = C.tinta; ctx.font = `500 ${r.texto}px Barlow, sans-serif`;
-  ctx.fillText(dia.t >= 600 ? 'Horas extra: se despacha lo pendiente' : `Llegan ~${(S.LAMBDA[h] * factor).toFixed(1)} pedidos por hora`, r.textoX, r.y1);
+  ctx.fillText(dia.t >= 600 ? 'Horas extra: se despacha lo pendiente' : `Llegan ~${(S.LAMBDA[h] * (1 + estado.crec / 100)).toFixed(1)} pedidos por hora`, r.textoX, r.y1);
   ctx.fillStyle = C['tinta-2'];
   ctx.fillText(`${dia.cola.length} en cola` + (dia.cola.length > capacidadCola() ? ' (no todos se ven)' : ''), r.textoX, r.y2);
 
@@ -712,25 +667,16 @@ function dibujar() {
     }
   });
 
-  // Camiones: uno por salida del día. Cargan lo que sale listo y se van a su hora
+  // Camiones: se llenan de a 6 cajas, salen y vuelven
   ctx.save();
   ctx.beginPath(); ctx.rect(...G.camion.clip); ctx.clip();
-  S.SALIDAS.forEach((_, k) => dibujarCamion(k));
+  [0, 1, 2].forEach(dibujarCamion);
   ctx.restore();
   ctx.fillStyle = C['tinta-2']; ctx.font = `500 ${G.camion.texto}px Barlow, sans-serif`; ctx.textBaseline = 'alphabetic';
   dia.flota.forEach((c, k) => {
-    const ruta = G.camion.enFila ? horaSalida(k) : `Ruta ${horaSalida(k)}`;           // en el teléfono no cabe la palabra "Ruta"
-    const texto = c.fase === 'carga' ? `${ruta}: ${c.carga} listo${c.carga === 1 ? '' : 's'}` : `${ruta}: salió con ${c.llevo}`;
+    const texto = c.fase === 'anden' ? `Camión ${k + 1}: ${Math.min(c.carga, CARGA_VIAJE)} de ${CARGA_VIAJE}` : `Camión ${k + 1}: en ruta`;
     const [bx, by] = baseCamion(k);
     ctx.fillText(texto, bx, by - 8);
-  });
-  // Bahías: lo que no sale hoy
-  G.bahias.forEach((b) => {
-    rect(b.x, b.y, b.w, b.h, 4); ctx.fillStyle = C.fondo; ctx.fill();
-    ctx.setLineDash([4, 3]); ctx.strokeStyle = C.control; ctx.lineWidth = 1; ctx.stroke(); ctx.setLineDash([]);
-    ctx.fillStyle = C['tinta-2']; ctx.font = '500 12px Barlow, sans-serif'; ctx.textBaseline = 'alphabetic';
-    ctx.fillText(b.texto, b.x + 8, b.y + 15);
-    ctx.fillStyle = C.tinta; ctx.font = '600 18px Barlow, sans-serif'; ctx.fillText(String(dia.bahia[b.tipo]), b.x + 8, b.y + 36);
   });
 
   for (const p of dia.pedidos.values()) dibujarCaja(p);
@@ -745,9 +691,9 @@ function pintarContadores() {
     ['En cola', dia.cola.length],
     ['Pedidos que llegaron', c.llegados],
     ['Despachados', c.despachados],
-    ['Perdieron su camión', c.perdieron, c.perdieron > 0],
+    ['Perdieron su ruta', c.perdieron, c.perdieron > 0],
     ['Cancelados', c.cancelados, c.cancelados > 0],
-    ['Venta perdida hoy', soles(c.venta), c.venta > 0],
+    ['Venta perdida hoy', soles(c.cancelados * S.TICKET), c.cancelados > 0],
     ['Espera promedio', c.nEspera ? `${(c.espera / c.nEspera).toFixed(1)} min` : '–'],
     ['Horas extra hoy', `${Math.round(extra)} min <span class="ic">S/ ${((extra / 60) * estado.hx).toFixed(2)}</span>`],
   ];
@@ -758,9 +704,8 @@ function ponerReproduccion(si) {
   reproduciendo = si;
   $('play').textContent = si ? 'Pausar' : (dia.t > 0 && !terminado() ? 'Continuar' : 'Reproducir');
   const faltas = dia.faltaron ? ` Hoy faltaron ${dia.faltaron} despachador${dia.faltaron > 1 ? 'es' : ''}.` : '';
-  const nombre = `Día ${semillaDia}, ${NOMBRES_DIA[dia.diaSemana]}`;
   $('estadoDia').textContent = !dia.log.length ? 'Sin despachadores no hay día que simular.'
-    : terminado() ? `${nombre}: terminó a las ${reloj(dia.fin)}.${faltas}` : `${nombre}.${faltas}`;
+    : terminado() ? `Día terminado a las ${reloj(dia.fin)}.${faltas}` : `Día ${semillaDia}.${faltas}`;
 }
 const terminado = () => dia.i >= dia.log.length && dia.t >= dia.fin;
 
@@ -777,16 +722,14 @@ pantallaChica.addEventListener('change', () => { configurarLienzo(); nuevoDia();
 // Una frase que cuenta en palabras lo que se ve en el almacén
 function narrar() {
   if (!dia.log.length) return 'Agrega al menos un despachador para ver el día.';
-  if (terminado()) return `Terminó el día: se despacharon ${dia.cont.despachados} pedidos, ${dia.cont.perdieron} perdieron su camión y se cancelaron ${dia.cont.cancelados}.`;
+  if (terminado()) return `Terminó el día: se despacharon ${dia.cont.despachados} pedidos y se cancelaron ${dia.cont.cancelados}.`;
   if (dia.t === 0) return 'Pulsa Reproducir: los pedidos entran por la flecha amarilla de la izquierda.';
   if (dia.t >= S.CIERRE) return 'Cerró el almacén (18:00): lo que queda en cola se despacha con horas extra.';
-  const u = dia.ultimaSalida;
-  if (u && dia.t - u.t < 25) return `Salió el camión de las ${horaSalida(u.k)} con ${dia.flota[u.k].llevo} pedidos; los que no estaban listos esperan al siguiente.`;
   const enCola = dia.cola.length;
   const sinCamion = dia.cola.filter((id) => dia.pedidos.get(id).perdio).length;
   const libres = dia.estaciones.filter((e) => e.activa && e.pedido === null).length;
   if (!enCola) return libres ? `Todo al día: hay ${libres} despachador${libres > 1 ? 'es' : ''} libre${libres > 1 ? 's' : ''} esperando pedidos.` : 'Todos los despachadores están ocupados, pero todavía no hay cola.';
-  if (sinCamion) return `Hay cola: ${enCola} pedido${enCola > 1 ? 's' : ''} esperando y ${sinCamion} ya no alcanzará${sinCamion > 1 ? 'n' : ''} su camión (borde rojo).`;
+  if (sinCamion) return `Hay cola: ${enCola} pedido${enCola > 1 ? 's' : ''} esperando y ${sinCamion} ya perdi${sinCamion > 1 ? 'eron' : 'ó'} su camión (borde rojo).`;
   return `Se forma cola: ${enCola} pedido${enCola > 1 ? 's' : ''} esperando porque no hay despachadores libres.`;
 }
 
@@ -821,6 +764,6 @@ if (!window.Chart) {
 // En el teléfono los controles arrancan plegados para que los resultados queden a la vista
 if (matchMedia('(max-width: 860px)').matches) document.querySelectorAll('.lateral details').forEach((d) => { d.open = false; });
 document.fonts.ready.then(crearGraficos);   // redibuja los gráficos con la tipografía ya cargada
-setTimeout(() => { base = evaluarActual({ crecimiento: 0, ausentismo: 0, qQuiebre: 1, margen: 1, costoHoraExtra: INICIAL.hx }); pintarBase(); }, 0);
+setTimeout(() => { base = evaluarActual({ crecimiento: 0, ausentismo: 0, T: S.T_CAL, p: S.P_CAL, margen: 1, costoHoraExtra: INICIAL.hx }); pintarBase(); }, 0);
 if (!reducirMovimiento) ponerReproduccion(true);
 requestAnimationFrame(cuadro);
