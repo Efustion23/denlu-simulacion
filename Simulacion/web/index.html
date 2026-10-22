@@ -4,13 +4,13 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Andén DENLU</title>
-  <meta name="description" content="Simulador del almacén de DENLU (Tarma): un día de despacho animado y la comparación de un año completo contra la situación actual.">
+  <meta name="description" content="Optimización de personal en el almacén de DENLU (Tarma): diagnóstico con colas, plan MILP, cobertura y ROI, con una animación de un día de despacho.">
   <script>try { var t = localStorage.getItem('denlu-tema'); if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; } catch (e) {}</script>
   <link rel="stylesheet" href="estilos.css">
 </head>
 <body>
   <div class="marco">
-    <aside class="lateral" aria-label="Controles de la simulación">
+    <aside class="lateral" aria-label="Plan que se anima">
       <div class="marca">
         <svg viewBox="0 0 32 32" width="32" height="32" aria-hidden="true">
           <rect x="3" y="8" width="26" height="20" rx="2" fill="var(--carton)"/>
@@ -27,81 +27,69 @@
         </button>
       </div>
 
-      <section aria-labelledby="tPersonal">
-        <h2 id="tPersonal">Personal</h2>
-        <div class="presets" id="presets" role="group" aria-label="Planes guardados"></div>
+      <section aria-labelledby="tPlan">
+        <h2 id="tPlan">Plan que se anima</h2>
+        <div class="presets" id="presets" role="group" aria-label="Plan de personal"></div>
         <p class="costo"><span id="costoMes"></span> al mes <span class="costo-gente" id="totalPersonas"></span></p>
-        <p class="aviso" id="avisoPT" hidden>El part-time supera el 40 % del personal que permite el D.S. 003-97-TR.</p>
-        <details class="plegable plegable-menor" id="detTurnos" open>
+        <details class="plegable plegable-menor" open>
           <summary>Turnos y cobertura</summary>
           <p class="eje-turnos" aria-hidden="true"><span>8h</span><span>18h</span></p>
           <table class="turnos" id="turnos"></table>
-          <div class="grafico grafico-cobertura"><canvas id="gCobertura" aria-label="Despachadores por hora frente al mínimo requerido"></canvas></div>
+          <div class="grafico grafico-cobertura"><canvas id="gPersonal" aria-label="Despachadores por hora del plan elegido frente al mínimo requerido"></canvas></div>
         </details>
       </section>
-
-      <details class="plegable" id="detEscenario" open>
-        <summary><h2 id="tEscenario">Escenario</h2></summary>
-        <label class="control">
-          <span>Crecimiento de la demanda <output id="vCrec"></output></span>
-          <input type="range" id="crec" min="0" max="60" step="5" value="0">
-        </label>
-        <label class="control">
-          <span>Ausentismo diario <output id="vAus"></output></span>
-          <input type="range" id="aus" min="0" max="20" step="1" value="0">
-        </label>
-        <label class="control">
-          <span>Espera máxima antes de perder la ruta <output id="vT"></output></span>
-          <input type="range" id="T" min="5" max="60" step="1" value="20">
-        </label>
-        <label class="control">
-          <span>Probabilidad de cancelar tras perderla <output id="vP"></output></span>
-          <input type="range" id="p" min="0" max="1" step="0.01" value="0.28">
-        </label>
-      </details>
-
-      <details class="plegable" id="detValoracion" open>
-        <summary><h2 id="tValoracion">Valoración</h2></summary>
-        <label class="control">
-          <span>Margen bruto de un pedido <output id="vMargen"></output></span>
-          <input type="range" id="margen" min="5" max="100" step="5" value="100">
-        </label>
-        <label class="control">
-          <span>Costo de una hora extra <output id="vHx"></output></span>
-          <input type="range" id="hx" min="0" max="15" step="0.01" value="5.34">
-        </label>
-        <p class="nota">Con 100 % la venta perdida se cuenta a precio de venta, como en el notebook. Solo se pagan como extra las horas después del cierre de las 18:00.</p>
-        <button type="button" class="enlace" id="restaurar">Volver a los valores iniciales</button>
-      </details>
     </aside>
 
     <main class="hoja">
       <header class="titulo">
         <div>
           <h1>Andén de despacho</h1>
-          <p class="hallazgo" id="hallazgo" aria-live="polite">Simulando el año…</p>
+          <p class="hallazgo">Con 3 despachadores fijos, a las 9 y 10 h la utilización supera 1.5 y tres de cada cuatro pedidos pierden su ruta. El plan del MILP cubre esas horas por <strong>S/ 6,867.52</strong> al mes.</p>
         </div>
-        <p class="plan-elegido" id="planElegido"></p>
+        <p class="plan-elegido">Fuente: <a href="https://github.com/Efustion23/denlu-simulacion/blob/main/Simulacion/Denlu.ipynb">Denlu.ipynb</a></p>
       </header>
 
-      <ol class="guia" aria-label="Cómo usar el simulador">
-        <li><strong>Elige el personal</strong> Cuántos despachadores entran en cada turno.</li>
-        <li><strong>Mira un día</strong> Los pedidos llegan, esperan y salen en camión.</li>
-        <li><strong>Compara el año</strong> Cancelaciones, esperas y costos frente a hoy.</li>
-      </ol>
+      <dl class="kpis" id="kpis" aria-label="Resultados principales de Denlu.ipynb"></dl>
 
-      <dl class="kpis" id="kpis" aria-label="Resumen del año simulado"></dl>
-      <div class="alerta" id="alerta" role="note" hidden></div>
-      <details class="como">
-        <summary>Cómo leer los resultados</summary>
-        <p id="ayuda"></p>
-      </details>
+      <section class="bloque" aria-labelledby="tDiag">
+        <div class="bloque-cab">
+          <h2 id="tDiag">1. Diagnóstico de la situación actual</h2>
+          <span class="estado">3 despachadores, 8 012 pedidos, 299 días</span>
+        </div>
+        <p class="nota-bloque">Teoría de colas M/M/c con μ = 44.5 min por pedido. A las 9 y 10 h la utilización supera 1 (en rojo): la cola crece sin límite y tres de cada cuatro pedidos pierden su ruta. El resto del día queda por debajo del objetivo de 0.85 (línea punteada).</p>
+        <div class="dos-col">
+          <table class="resultados" id="tablaDiag"></table>
+          <div class="grafico grafico-medio"><canvas id="gRho" aria-label="Utilización por hora con 3 despachadores"></canvas></div>
+        </div>
+      </section>
+
+      <section class="bloque" aria-labelledby="tMilp">
+        <div class="bloque-cab">
+          <h2 id="tMilp">2. Plan óptimo de turnos (MILP)</h2>
+          <span class="estado">ρ ≤ 0.85 en cada hora, part-time ≤ 40 % (D.S. 003-97-TR)</span>
+        </div>
+        <p class="nota-bloque">El mínimo de despachadores por hora es D<sub>h</sub> = máx(1, ⌈λ<sub>h</sub> / (0.85 μ)⌉). El modelo de programación entera elige cuántas personas entran en cada turno (tres de tiempo completo con almuerzo y tres de medio tiempo) al menor costo de planilla.</p>
+        <p class="plan-milp" id="planMilp"></p>
+        <div class="dos-col">
+          <table class="resultados" id="tablaCobertura"></table>
+          <div class="grafico grafico-medio"><canvas id="gCobertura" aria-label="Despachadores requeridos y asignados por hora"></canvas></div>
+        </div>
+      </section>
+
+      <section class="bloque" aria-labelledby="tRoi">
+        <div class="bloque-cab">
+          <h2 id="tRoi">3. Retorno de la inversión</h2>
+          <span class="estado">supuesto: el plan recupera el 95 % de la venta perdida</span>
+        </div>
+        <table class="resultados resultados-roi" id="tablaRoi"></table>
+      </section>
 
       <section class="bloque" aria-labelledby="tDia">
         <div class="bloque-cab">
-          <h2 id="tDia">Un día en el almacén</h2>
+          <h2 id="tDia">4. Un día en el almacén</h2>
           <span class="estado" id="estadoDia" aria-live="polite"></span>
         </div>
+        <p class="nota-bloque">Ilustración, no forma parte de <code>Denlu.ipynb</code>: un día simulado pedido por pedido con las tasas λ por hora del diagnóstico y μ = 44.5 min. Elige en la barra lateral si lo atiende la situación actual o el plan MILP. Como supuesto de la animación, un pedido que espera más de 20 min pierde su ruta y, a veces, el cliente cancela.</p>
         <p class="narracion" id="narracion"></p>
         <div class="lienzo"><canvas id="lienzo" role="img" aria-label="Vista del almacén: cola de pedidos, despachadores y andén de carga"></canvas></div>
         <ul class="leyenda" aria-label="Qué significa cada cosa">
@@ -128,35 +116,9 @@
         <div class="grafico grafico-dia"><canvas id="gDia" aria-label="Pedidos en cola y despachadores en turno durante el día"></canvas></div>
       </section>
 
-      <section class="bloque" aria-labelledby="tAnio">
-        <div class="bloque-cab">
-          <h2 id="tAnio">Un año simulado</h2>
-          <span class="estado">299 días, 10 réplicas, intervalo de confianza al 95 %</span>
-        </div>
-        <table class="resultados" id="resultados"></table>
-        <p class="roi" id="roi"></p>
-        <div class="graficos-hora">
-          <div class="grafico"><canvas id="gEspera" aria-label="Espera media por hora de llegada"></canvas></div>
-          <div class="grafico"><canvas id="gPerdida" aria-label="Pérdida de ruta por hora de llegada"></canvas></div>
-        </div>
-      </section>
-
-      <section class="bloque" aria-labelledby="tBase">
-        <div class="bloque-cab">
-          <h2 id="tBase">Punto de partida: 2025</h2>
-          <span class="estado">3 despachadores fijos, 8 012 pedidos</span>
-        </div>
-        <p class="nota-bloque">El modelo parte del diagnóstico de 2025 y se calibró para reproducir sus totales: 36 % de pedidos pierden su ruta y 10 % se cancelan. A las 9 y 10 h la utilización supera 1: la cola crece sin límite (barras rojas). Hora por hora el ajuste es parcial: la simulación arrastra la cola del pico hasta el mediodía, y el histórico no.</p>
-        <div class="graficos-base">
-          <div class="grafico"><canvas id="gRho" aria-label="Utilización de los 3 despachadores actuales por hora"></canvas></div>
-          <div class="grafico"><canvas id="gValEspera" aria-label="Espera por hora: histórico 2025 frente a simulada"></canvas></div>
-          <div class="grafico"><canvas id="gValPerdida" aria-label="Pérdida de ruta por hora: histórico 2025 frente a simulada"></canvas></div>
-        </div>
-      </section>
-
       <footer class="pie-pagina">
-        <span>Diagnóstico y MILP en <a href="https://github.com/Efustion23/denlu-simulacion/blob/main/Simulacion/Denlu.ipynb">Denlu.ipynb</a>; simulación en <a href="https://github.com/Efustion23/denlu-simulacion/blob/main/Simulacion/Denlu_Simulacion.ipynb">Denlu_Simulacion.ipynb</a></span>
-        <a href="https://colab.research.google.com/github/Efustion23/denlu-simulacion/blob/main/Simulacion/Denlu_Simulacion.ipynb">Abrir la simulación en Colab</a>
+        <span>Diagnóstico, MILP y ROI del notebook <a href="https://github.com/Efustion23/denlu-simulacion/blob/main/Simulacion/Denlu.ipynb">Denlu.ipynb</a></span>
+        <a href="https://colab.research.google.com/github/Efustion23/denlu-simulacion/blob/main/Simulacion/Denlu.ipynb">Abrir en Colab</a>
         <a href="https://github.com/Efustion23/denlu-simulacion">Código</a>
       </footer>
     </main>

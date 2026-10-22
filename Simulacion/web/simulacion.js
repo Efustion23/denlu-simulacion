@@ -1,5 +1,5 @@
-// Modelo de simulación de eventos discretos del andén de DENLU.
-// Es el mismo modelo de Denlu_Simulacion.ipynb (SimPy), reescrito en JavaScript para el navegador.
+// Datos de Denlu.ipynb (diagnóstico, MILP y ROI) y el modelo de eventos discretos que anima un día en el andén.
+// Las cifras que muestra la página salen de Denlu.ipynb; la animación es una ilustración con sus tasas por hora.
 
 const MU_MIN = 44.5;                       // tiempo medio de despacho (min), exponencial
 const MU_H = 60 / MU_MIN;
@@ -13,7 +13,7 @@ const TICKET = 620042.58 / 801;            // venta perdida 2025 / pedidos cance
 const C_FT = 1373.50, C_PT = 686.76;       // costo mensual por trabajador (S/)
 const COSTO_HORA_EXTRA = (1025 / 240) * 1.25;   // hora simple del sueldo base + 25 % (D.S. 007-2002-TR)
 const CIERRE = 600;                        // 18:00, en minutos desde las 08:00
-const T_CAL = 20, P_CAL = 0.28;            // calibrados en el notebook
+const T_CAL = 20, P_CAL = 0.28;            // supuestos de la animación: la situación actual simulada reproduce la pérdida de ruta y la cancelación de 2025
 const REPLICAS = 10, T_STUDENT = 2.262;    // t(0.975, 9)
 
 const TURNOS = {
@@ -28,10 +28,26 @@ const TURNOS = {
 
 const PLANES = {
   actual: { nombre: 'Situación actual', plan: { Fijo: 3 } },
-  rho85: { nombre: 'MILP ρ 0.85', plan: { 'FT-1': 3, 'FT-3': 1, 'PT-1': 2 } },
-  rho75: { nombre: 'MILP ρ 0.75', plan: { 'FT-1': 4, 'FT-3': 1, 'PT-1': 2 } },
-  rho65: { nombre: 'MILP ρ 0.65', plan: { 'FT-1': 4, 'FT-3': 1, 'PT-1': 3 } },
+  milp: { nombre: 'Plan MILP', plan: { 'FT-1': 3, 'FT-3': 1, 'PT-1': 2 } },   // solución de la celda 7 de Denlu.ipynb
 };
+
+// Salidas de Denlu.ipynb que no dependen del modelo de simulación
+const NOTEBOOK = {
+  rho: [0.395, 1.667, 1.549, 0.757, 0.327, 0.454, 0.689, 0.372, 0.274, 0.140],   // celda 1 (con λ sin redondear)
+  rhoObjetivo: 0.85,
+  cancelacionPct: 10.00,                   // celda 11
+  ventaPerdida: 620042.58,                 // celda 11: venta perdida anual por cancelación (S/)
+  recuperacion: 0.95,                      // celda 10: supuesto de ventas recuperadas con el plan óptimo
+};
+
+// Celda 11 de Denlu.ipynb: retorno de la inversión del plan MILP frente a los 3 despachadores fijos
+function roi() {
+  const planillaActual = 12 * costoMensual(PLANES.actual.plan), planillaOptima = 12 * costoMensual(PLANES.milp.plan);
+  const inversion = planillaOptima - planillaActual;
+  const recuperado = NOTEBOOK.ventaPerdida * NOTEBOOK.recuperacion;
+  const beneficio = recuperado - inversion;
+  return { planillaActual, planillaOptima, inversion, recuperado, beneficio, roi: (100 * beneficio) / inversion };
+}
 
 // Generador pseudoaleatorio con semilla (mulberry32), para que cada día sea reproducible
 function crearRng(semilla) {
@@ -206,6 +222,6 @@ function evaluar(plan, escenario = {}) {
 
 const Simulacion = {
   MU_MIN, MU_H, DIAS, HORAS, LAMBDA, HIST_ESPERA, HIST_PERDIDA, TICKET, C_FT, C_PT, COSTO_HORA_EXTRA, CIERRE, T_CAL, P_CAL, TURNOS, PLANES,
-  crearRng, costoMensual, personalPorHora, requeridos, simularDia, presentesDelDia, simularAnio, evaluar,
+  NOTEBOOK, roi, crearRng, costoMensual, personalPorHora, requeridos, simularDia, presentesDelDia, simularAnio, evaluar,
 };
 if (typeof module !== 'undefined') module.exports = Simulacion;
