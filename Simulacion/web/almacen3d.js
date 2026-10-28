@@ -68,15 +68,18 @@ const Vista3D = (() => {
   function pintarPiso() {
     const c = texPiso.image, g = c.getContext('2d'), e = c.width / 716;
     g.setTransform(e, 0, 0, e, 0, 0);
-    g.fillStyle = C.suelo; g.fillRect(0, 0, 716, 560);
+    g.fillStyle = C.suelo; g.fillRect(0, 0, 716, A.H);
     g.strokeStyle = C.linea; g.lineWidth = 1.5; g.beginPath();
-    for (let x = 120; x < 716; x += 120) { g.moveTo(x, 0); g.lineTo(x, 560); }
-    for (let y = 120; y < 560; y += 120) { g.moveTo(0, y); g.lineTo(716, y); }
+    for (let x = 120; x < 716; x += 120) { g.moveTo(x, 0); g.lineTo(x, A.H); }
+    for (let y = 120; y < A.H; y += 120) { g.moveTo(0, y); g.lineTo(716, y); }
     g.stroke();
     g.globalAlpha = 0.55; g.strokeStyle = C.fondo; g.lineWidth = 26; g.lineCap = 'round';
     g.beginPath(); A.red.forEach(([x1, y1, x2, y2]) => { g.moveTo(x1, y1); g.lineTo(x2, y2); }); g.stroke();
     g.globalAlpha = 1;
+    const a = A.acopio;                                     // zona de acopio: rectángulo amarillo punteado
+    g.setLineDash([10, 7]); g.strokeStyle = C.seguridad; g.lineWidth = 3; g.strokeRect(a.x, a.y, a.w, a.h); g.setLineDash([]);
     g.fillStyle = C['tinta-2']; g.font = '600 15px Barlow, sans-serif';
+    g.fillText('Zona de acopio', ...a.etiqueta);
     [['Estantería', 290, 78], ['Mesas de empaque', 290, 470], ['Ventas', 26, 190], ['Comedor y vestuario', 26, 540], ['Pedidos pendientes', 26, 404]]
       .forEach(([t, x, y]) => g.fillText(t, x, y));
     texPiso.needsUpdate = true;
@@ -130,32 +133,44 @@ const Vista3D = (() => {
     hoja.position.set(0.3, 1.0, 0.24); hoja.rotation.x = -1.1;
     const auricular = caja(0.08, 0.2, 0.06, mat('#1b1b1b'), 0.02, 1.6, -0.16, false);
     auricular.visible = false;
-    cuerpo.add(cajaMano, hoja, auricular);
-    g.userData = { cuerpo, piernas, brazos, cajaMano, hoja, auricular };
+    const tablilla = new THREE.Group();                     // lista de productos en una tablilla
+    tablilla.add(caja(0.2, 0.012, 0.27, mat('#8a643a'), 0, 0, 0, false));
+    const papel = caja(0.17, 0.004, 0.22, mat('#fbfaf6'), 0, 0.008, 0, false);
+    tablilla.add(papel);
+    [-0.06, 0, 0.06].forEach((z) => tablilla.add(caja(0.1, 0.004, 0.015, mat('#1e7b4f'), 0.01, 0.012, z, false)));
+    tablilla.position.set(0.32, 1.02, 0.22); tablilla.rotation.z = 0.5;
+    const productos = new THREE.Group();                    // lo recogido de los estantes
+    for (let i = 0; i < 3; i++) productos.add(caja(0.17, 0.17, 0.17, mat(PRODUCTOS[i]), 0.36, 0.98 + (i === 2 ? 0.18 : 0), i === 2 ? 0 : (i ? 0.09 : -0.09)));
+    cuerpo.add(cajaMano, hoja, auricular, tablilla, productos);
+    g.userData = { cuerpo, piernas, brazos, cajaMano, hoja, auricular, tablilla, productos };
     return g;
   }
   // Pose de cada cuadro: caminar, cargar, recoger, empacar, sentarse, comer o hablar por teléfono
   function posar(g, o) {
-    const { cuerpo, piernas, brazos, cajaMano, hoja, auricular } = g.userData;
+    const { cuerpo, piernas, brazos, cajaMano, hoja, auricular, tablilla, productos } = g.userData;
     auricular.visible = !!o.habla;
     const s = o.camina ? Math.sin(o.paso) : 0;
     cuerpo.position.y = o.sentado ? -0.42 : (o.camina ? Math.abs(s) * 0.04 : 0);
     piernas[0].rotation.z = o.sentado ? Math.PI / 2 : s * 0.55;
     piernas[1].rotation.z = o.sentado ? Math.PI / 2 : -s * 0.55;
     let b0 = -s * 0.45, b1 = s * 0.45;
-    if (o.carga === 'caja') { b0 = b1 = 1.2; }
+    if (o.carga === 'caja' || o.carga === 'productos') { b0 = b1 = 1.2; }
     else if (o.accion === 'recoger') { b0 = 1.9 + 0.5 * Math.sin(o.t); b1 = 1.9 + 0.5 * Math.sin(o.t + Math.PI); }
-    else if (o.accion === 'empacar') { b0 = 1.15 + 0.25 * Math.sin(o.t * 1.6); b1 = 1.15 + 0.25 * Math.sin(o.t * 1.6 + Math.PI); }
+    else if (o.accion === 'empacar' || o.accion === 'revisar') { b0 = 1.15 + 0.25 * Math.sin(o.t * 1.6); b1 = 1.15 + 0.25 * Math.sin(o.t * 1.6 + Math.PI); }
     else if (o.telefono) { b0 = 1.25 + 0.15 * Math.sin(o.t); b1 = 1.25; }
     else if (o.come) { b0 = 0.9; b1 = 0.9 + 1.1 * Math.max(0, Math.sin(o.t)); }
-    else if (o.carga === 'hoja') b1 = 0.9;
+    else if (o.carga === 'hoja' || o.carga === 'lista') b1 = 0.9;
     brazos[0].rotation.z = b0; brazos[1].rotation.z = b1;
     cajaMano.visible = o.carga === 'caja';
     hoja.visible = o.carga === 'hoja';
+    tablilla.visible = o.carga === 'lista';
+    productos.visible = o.carga === 'productos';
+    if (productos.visible && o.colores) productos.children.forEach((m, i) => { m.material = mat(o.colores[i]); });
   }
 
   /* --- Escena fija --- */
   const personas3 = [], mesas3 = [], camiones3 = [], hojas3 = new Map(), humo3 = [], pila3 = [];
+  let encargado3, listaMostrador, globoLista, palets3 = [];
   let vendedores3 = [], burbujas3 = [], letreroMas, anillo, ruta3, recogida3 = [], mesasDe = -1;
   const SLOT = (i) => { const c = i % 5, r = Math.floor(i / 5) % 4; return [X(244) + 0.07, [2.1, 1.75, 1.4, 1.05][r], Z(240 + c * 34)]; };
   const BANDEJA = [X(244) + 0.2, 0.84, Z(300)];
@@ -213,10 +228,10 @@ const Vista3D = (() => {
     sol.shadow.camera.updateProjectionMatrix();
     escena.add(cielo, sol);
 
-    const c1 = document.createElement('canvas'); c1.width = 1432; c1.height = 1120;
+    const c1 = document.createElement('canvas'); c1.width = 1432; c1.height = Math.round((1432 * A.H) / 716);
     texPiso = new THREE.CanvasTexture(c1); texPiso.anisotropy = 8;
-    const piso = new THREE.Mesh(new THREE.PlaneGeometry(716 / M, 560 / M), new THREE.MeshLambertMaterial({ map: texPiso }));
-    piso.rotation.x = -Math.PI / 2; piso.position.set(X(358), 0, Z(280)); piso.receiveShadow = true;
+    const piso = new THREE.Mesh(new THREE.PlaneGeometry(716 / M, A.H / M), new THREE.MeshLambertMaterial({ map: texPiso }));
+    piso.rotation.x = -Math.PI / 2; piso.position.set(X(358), 0, Z(A.H / 2)); piso.receiveShadow = true;
     const c2 = document.createElement('canvas'); c2.width = 1120; c2.height = 720;
     texPatio = new THREE.CanvasTexture(c2); texPatio.anisotropy = 8;
     const patio = new THREE.Mesh(new THREE.PlaneGeometry(1120 / M, 720 / M), new THREE.MeshLambertMaterial({ map: texPatio }));
@@ -258,6 +273,23 @@ const Vista3D = (() => {
     cartel.position.set(X(244) + 0.07, 2.7, Z(310)); cartel.rotation.y = Math.PI / 2; escena.add(cartel);
     letreroMas = spriteTexto(' ', { fondo: C.rojo, tam: 34 }, 0.32);
     letreroMas.position.set(X(250), 2.38, Z(250)); letreroMas.visible = false; escena.add(letreroMas);
+
+    // Zona de acopio: mostrador del encargado (de pie), su impresora de listas y la lista que está haciendo
+    const ac = A.acopio, [mx0, my0, mw0, mh0] = ac.mostrador;
+    escena.add(caja(mw0 / M, 1.0, mh0 / M, mat('#b48a5a'), X(mx0 + mw0 / 2), 0.5, Z(my0 + mh0 / 2)));
+    escena.add(caja(0.34, 0.2, 0.3, mat('#4a4e52'), X(mx0 + mw0 - 10), 1.1, Z(my0 + mh0 / 2)));
+    encargado3 = crearPersona({ ropa: '#3d7a5a', piel: PIEL[4], pelo: PELO[1] });
+    encargado3.position.set(X(ac.encargado[0]), 0, Z(ac.encargado[1])); encargado3.rotation.y = Math.PI / 2;
+    const etEnc = spriteTexto('Encargado de acopio', { fondo: '#3d7a5a', tam: 34 }, 0.28);
+    etEnc.position.y = 2.05; encargado3.add(etEnc);
+    escena.add(encargado3);
+    listaMostrador = new THREE.Group();
+    listaMostrador.add(caja(0.3, 0.004, 0.4, mat('#fbfaf6'), 0, 0, 0, false));
+    listaMostrador.userData.renglones = [-0.12, -0.04, 0.04, 0.12].map((z) => { const l = caja(0.2, 0.004, 0.02, mat('#5b5f5c'), 0, 0.004, z, false); listaMostrador.add(l); return l; });
+    listaMostrador.position.set(X(mx0 + 18), 1.005, Z(my0 + mh0 / 2)); listaMostrador.rotation.y = Math.PI / 2;
+    globoLista = spriteTexto(' ', { fondo: '#3d7a5a', tam: 34 }, 0.3);
+    globoLista.position.set(X(mx0 + mw0 / 2), 2.55, Z(my0 + mh0 / 2) - 0.2);
+    escena.add(listaMostrador, globoLista);
 
     // Comedor: mesa, sillas y platos
     const [mx, my, mw, mh] = cm.mesa;
@@ -403,6 +435,7 @@ const Vista3D = (() => {
     general: { pos: [-2, 17, 16], obj: [0, 0, 0.5], vertical: { pos: [-14.5, 16.5, 1], obj: [1.5, 0, 0] } },
     ventas: { pos: [-2.2, 4.4, 1.2], obj: [-7.4, 1.0, -1.6] },
     estantes: { pos: [-5.3, 3.1, -1.375], obj: [2, 0.7, -1.375] },
+    acopio: { pos: [-1.2, 5.6, 12.4], obj: [-0.6, 0.6, 6.2] },
     anden: { pos: [0.5, 7.5, 9], obj: [8, 0.5, -0.2], vertical: { pos: [-1.5, 11, 3], obj: [7.5, 0.5, -0.2] } },
   };
   const vista = (nombre) => { const v = VISTAS[nombre]; return v && ancho < alto && v.vertical ? v.vertical : v; };
@@ -517,8 +550,9 @@ const Vista3D = (() => {
       const libre = per.activo && !tr && !per.ruta.length;
       g.position.set(X(per.x), 0, Z(per.y));
       g.rotation.y = -(per.angVis + (libre ? 0.4 * Math.sin(dia.t * 0.2 + k * 1.7) : 0));
-      const accion = tramo && (tramo.tipo === 'recoger' || tramo.tipo === 'empacar') ? tramo.tipo : null;
-      posar(g, { camina: per.camina, paso: per.paso, carga: per.carga, accion, sentado, come: sentado, t: sentado ? dia.t * 0.7 + k : dia.t * 1.4 });
+      const accion = tramo && ['recoger', 'empacar', 'revisar'].includes(tramo.tipo) ? tramo.tipo : null;
+      const colores = tr ? [0, 1, 2].map((i) => PRODUCTOS[(tr.id + i) % PRODUCTOS.length]) : null;
+      posar(g, { camina: per.camina, paso: per.paso, carga: per.carga, colores, accion, sentado, come: sentado, t: sentado ? dia.t * 0.7 + k : dia.t * 1.4 });
       ponerTexto(g.userData.etiqueta, `D${k + 1}`, { fondo: per.activo || tr ? '#2d5c88' : '#5b5f5c', tam: 36 });
       g.userData.etiqueta.visible = !sentado;
       // Productos que saltan del estante (a la altura de las repisas) a los brazos
@@ -574,8 +608,37 @@ const Vista3D = (() => {
         escena.add(g);
         mesas3.push({ g, armado, solapas, cinta, visto });
       }
+      palets3.forEach((p) => escena.remove(p.g)); palets3.length = 0;
+      for (let k = 0; k < dia.cap; k++) {
+        const [px, py, pw, ph] = A.acopio.palet(k), g = new THREE.Group(), w = pw / M, d = ph / M;
+        g.add(caja(w, 0.05, d, mat('#b48a5a'), 0, 0.12, 0), caja(w, 0.05, d, mat('#a07850'), 0, 0.025, 0));
+        [-1, 0, 1].forEach((i) => g.add(caja(0.08, 0.08, d, mat('#8a643a'), i * (w / 2 - 0.05), 0.08, 0)));
+        const et = spriteTexto(`D${k + 1}`, { fondo: null, color: '#5b5f5c', tam: 36 }, 0.22);
+        et.position.set(0, 0.45, d / 2 + 0.1); g.add(et);
+        const carga = [0, 1, 2].map((i) => { const m = caja(0.3, 0.3, 0.3, mat(PRODUCTOS[i]), (i - 1) * 0.32, 0.3, 0); g.add(m); return m; });
+        const revision = spriteTexto(' ', { fondo: C.verde, tam: 34 }, 0.26);
+        revision.position.set(0, 0.85, 0); g.add(revision);
+        g.position.set(X(px + pw / 2), 0, Z(py + ph / 2));
+        escena.add(g);
+        palets3.push({ g, carga, revision });
+      }
       mesasDe = dia.cap;
     }
+    // Acopio: el encargado escribe mientras hace una lista; los palés muestran lo que se está revisando
+    const enLista = dia.personas.map((p, k) => [k, avanceEn(p, 'lista')]).filter(([, f]) => f !== null).sort((x, y) => y[1] - x[1])[0];
+    posar(encargado3, { accion: enLista ? 'empacar' : null, t: dia.t * 1.6 });
+    listaMostrador.visible = globoLista.visible = !!enLista;
+    if (enLista) {
+      const [k, f] = enLista;
+      listaMostrador.userData.renglones.forEach((l, i) => { l.visible = i < Math.ceil(f * 4); });
+      ponerTexto(globoLista, `Lista de D${k + 1} · ${Math.round(f * 100)} %`, { fondo: '#3d7a5a', tam: 34 });
+    }
+    palets3.forEach((p, k) => {
+      const per = dia.personas[k], f = avanceEn(per, 'revisar');
+      p.carga.forEach((m, i) => { m.visible = f !== null; if (f !== null) m.material = mat(PRODUCTOS[(per.trabajo.id + i) % PRODUCTOS.length]); });
+      p.revision.visible = f !== null;
+      if (f !== null) ponerTexto(p.revision, `✓ ${Math.min(3, Math.floor(f * 3.6))} de 3`, { fondo: C.verde, tam: 34 });
+    });
     mesas3.forEach((m, k) => {
       const per = dia.personas[k], tr = per && per.trabajo, tramo = tr && tr.tramos[tr.fase];
       m.armado.visible = !!tramo && tramo.tipo === 'empacar';
