@@ -534,7 +534,7 @@ function nuevoDia() {
   // Al empezar el día cada despachador en turno está en su mesa; los demás, en el comedor y vestuario
   dia.personas = dia.estaciones.map((e, k) => {
     const lugar = e.activa ? lugarMesa(k) : lugarAsiento(k);
-    return { x: lugar.punto[0], y: lugar.punto[1], ang: lugar.ang, angVis: lugar.ang, paso: 0, despachados: 0, lugar, destino: lugar, ruta: [], activo: e.activa,
+    return { x: lugar.punto[0], y: lugar.punto[1], vx: lugar.punto[0], vy: lugar.punto[1], ox: 0, oy: 0, ang: lugar.ang, angVis: lugar.ang, paso: 0, despachados: 0, lugar, destino: lugar, ruta: [], activo: e.activa,
       trabajo: null, carga: null, piel: PIEL[k % PIEL.length], pelo: PELO[k % PELO.length] };
   });
   avanzar(0);
@@ -714,7 +714,7 @@ function mover(dt, dtSim) {
       const per = dia.personas[p.est], tramo = per.trabajo && per.trabajo.tramos[1];
       if (!tramo) continue;
       const f = suave(Math.min(1, (dia.t - tramo.t0) / Math.max(1e-6, tramo.t1 - tramo.t0)));
-      const hx = per.x + Math.cos(per.angVis) * 11 * P.esc - 11, hy = per.y + Math.sin(per.angVis) * 11 * P.esc - 14;
+      const hx = per.vx + Math.cos(per.angVis) * 11 * P.esc - 11, hy = per.vy + Math.sin(per.angVis) * 11 * P.esc - 14;
       p.x = p.x0 + (hx - p.x0) * f; p.y = p.y0 + (hy - p.y0) * f; p.escala = 1 - 0.65 * f;
       continue;
     }
@@ -755,6 +755,7 @@ function mover(dt, dtSim) {
     const giro = Math.atan2(Math.sin(per.ang - per.angVis), Math.cos(per.ang - per.angVis));
     per.angVis += giro * (reducirMovimiento ? 1 : 1 - Math.exp(-dt * 14));
   }
+  separar(dt);
   dia.humo.forEach((h) => { h.vida -= dt; h.x += h.vx * dt; h.y += h.vy * dt; });
   dia.humo = dia.humo.filter((h) => h.vida > 0);
   dia.avisos.forEach((a) => { a.vida -= dt; });
@@ -788,6 +789,28 @@ function moverCamiones(dt) {
       c.d *= Math.exp(-dt * 4);
       if (c.d < 0.5) { c.d = 0; c.fase = 'anden'; }
     }
+  });
+}
+
+// Solo visual: si dos personas quedan casi en el mismo punto (en un pasillo, el tablero o el mostrador),
+// cada una se corre unos px hacia un lado para que se vean las dos. El recorrido lógico no cambia.
+function separar(dt) {
+  const lim = 18 * P.esc, ps = dia.personas, k = reducirMovimiento ? 1 : 1 - Math.exp(-dt * 6);
+  ps.forEach((a, i) => {
+    let fx = 0, fy = 0;
+    const sentadoA = !a.activo && !a.ruta.length && a.lugar.sentado;
+    if (!sentadoA) ps.forEach((b, j) => {
+      if (i === j || (!b.activo && !b.ruta.length && b.lugar.sentado)) return;
+      let dx = a.x - b.x, dy = a.y - b.y, d = Math.hypot(dx, dy);
+      if (d >= lim) return;
+      if (d < 0.5) { dx = -Math.sin(a.ang) * (i < j ? 1 : -1); dy = Math.cos(a.ang) * (i < j ? 1 : -1); d = 1; }   // mismo punto: de costado
+      const f = (lim - d) / lim;
+      fx += (dx / d) * f * 9; fy += (dy / d) * f * 9;
+    });
+    const m = Math.hypot(fx, fy), tope = 9 * P.esc;
+    if (m > tope) { fx *= tope / m; fy *= tope / m; }
+    a.ox += (fx - a.ox) * k; a.oy += (fy - a.oy) * k;
+    a.vx = a.x + a.ox; a.vy = a.y + a.oy;
   });
 }
 
@@ -966,9 +989,14 @@ function dibujarAcopio() {
     ctx.fillText(`D${k + 1}`, px + 2, py + ph + 10);
     const per = dia.personas[k], f = avanceEn(per, 'revisar');
     if (f === null) continue;
-    // Los productos del pedido sobre el palé y la lista con un visto por cada producto revisado
+    // Los productos del pedido pasan de los brazos al palé (con un saltito) y la lista se marca con un visto por cada uno
     const id = per.trabajo.id, revisados = Math.min(3, Math.floor(f * 3.6));
-    for (let i = 0; i < 3; i++) { ctx.fillStyle = PRODUCTOS[(id + i) % PRODUCTOS.length]; ctx.fillRect(px + 3 + (i % 2) * 9, py + 3 + Math.floor(i / 2) * 9, 8, 8); }
+    const hx = per.vx + Math.cos(per.angVis) * 10, hy = per.vy + Math.sin(per.angVis) * 10;
+    for (let i = 0; i < 3; i++) {
+      const q = suave(Math.min(1, Math.max(0, (f - i * 0.04) / 0.12))), tx = px + 3 + (i % 2) * 9, ty = py + 3 + Math.floor(i / 2) * 9;
+      ctx.fillStyle = PRODUCTOS[(id + i) % PRODUCTOS.length];
+      ctx.fillRect(hx - 4 + (tx - hx + 4) * q, hy - 4 + (ty - hy + 4) * q - Math.sin(q * Math.PI) * 8, 8, 8);
+    }
     const lx = px + pw - 15, ly = py + 2;
     ctx.fillStyle = '#fbfaf6'; ctx.fillRect(lx, ly, 13, ph - 4);
     ctx.strokeStyle = C.verde; ctx.lineWidth = 1.6;
@@ -980,7 +1008,14 @@ function dibujarAcopio() {
   }
   // El encargado, detrás de su mostrador: escribe mientras hace una lista
   const [ex, ey] = a.encargado;
-  dibujarPersona(ex, ey, -Math.PI / 2, { ropa: '#3d7a5a', piel: PIEL[4], pelo: PELO[1], accion: !!quien, t: dia.t * 1.6 });
+  dibujarPersona(ex, ey, miradaEncargado(quien), { ropa: '#3d7a5a', piel: PIEL[4], pelo: PELO[1], accion: !!quien, t: dia.t * 1.6 });
+}
+// El encargado mira hacia el mostrador; si atiende a alguien, gira un poco hacia esa persona
+function miradaEncargado(quien) {
+  const [ex, ey] = P.acopio.encargado;
+  if (!quien) return -Math.PI / 2 + 0.3 * Math.sin(dia.t * 0.15);
+  const per = dia.personas[quien[0]], a = Math.atan2(per.vy - ey, per.vx - ex);
+  return Math.max(-Math.PI / 2 - 0.9, Math.min(-Math.PI / 2 + 0.9, a));
 }
 
 function dibujarMesas() {
@@ -1041,6 +1076,10 @@ function dibujarCamion(k) {
       ctx.save(); ctx.translate(x + 13, y + 10.5); ctx.scale(e, e); cajaDibujo(-13, -10.5, 26, 21); ctx.restore();
     }
   }
+  if (c.fase === 'volviendo' && !reducirMovimiento) {        // luces de retroceso que parpadean
+    ctx.fillStyle = Math.sin(performance.now() / 120) > 0 ? '#ff3b30' : '#7a1d18';
+    ctx.fillRect(-2, -27, 4, 8); ctx.fillRect(-2, 19, 4, 8);
+  }
   // Puertas traseras: abiertas en el andén, se cierran antes de salir
   ctx.strokeStyle = C['tinta-2']; ctx.lineWidth = 3; ctx.lineCap = 'round';
   const giro = (Math.PI / 2 + 0.35) * c.puerta;
@@ -1066,8 +1105,8 @@ function dibujarBurbuja(b) {
 // Mientras recoge, tres productos saltan del estante a sus brazos
 function dibujarRecogida(per, tramo, id) {
   const f = Math.min(1, (dia.t - tramo.t0) / Math.max(1e-6, tramo.t1 - tramo.t0)), a = per.angVis, e = P.esc;
-  const sx = per.x + Math.cos(a) * 24 * e, sy = per.y + Math.sin(a) * 24 * e;
-  const hx = per.x + Math.cos(a) * 8 * e, hy = per.y + Math.sin(a) * 8 * e;
+  const sx = per.vx + Math.cos(a) * 24 * e, sy = per.vy + Math.sin(a) * 24 * e;
+  const hx = per.vx + Math.cos(a) * 8 * e, hy = per.vy + Math.sin(a) * 8 * e;
   const caja = (x, y, i) => {
     ctx.fillStyle = PRODUCTOS[(id + i) % PRODUCTOS.length]; ctx.fillRect(x - 3.5, y - 3.5, 7, 7);
     ctx.strokeStyle = 'rgba(0,0,0,0.3)'; ctx.lineWidth = 1; ctx.strokeRect(x - 3.5, y - 3.5, 7, 7);
@@ -1081,8 +1120,8 @@ function dibujarRecogida(per, tramo, id) {
 
 // Lo que le queda por caminar a una persona, para dibujar su recorrido
 function rutaPendiente(per) {
-  if (!per.trabajo) return [[per.x, per.y], ...per.ruta];
-  const tr = per.trabajo, pts = [[per.x, per.y]];
+  if (!per.trabajo) return [[per.vx, per.vy], ...per.ruta];
+  const tr = per.trabajo, pts = [[per.vx, per.vy]];
   tr.tramos.forEach((tm, i) => {
     if (i < tr.fase || tm.tipo !== 'camino') return;
     if (i > tr.fase) { pts.push(...tm.dato); return; }
@@ -1121,7 +1160,7 @@ function dibujarFoco(k) {
     ctx.fillStyle = C.acero; circulo(fx, fy, 4);
   }
   ctx.strokeStyle = C.acero; ctx.lineWidth = 2;
-  ctx.beginPath(); ctx.arc(per.x, per.y, 17 * P.esc, 0, 2 * Math.PI); ctx.stroke();
+  ctx.beginPath(); ctx.arc(per.vx, per.vy, 17 * P.esc, 0, 2 * Math.PI); ctx.stroke();
 }
 function dibujarFicha(k) {
   const per = dia.personas[k];
@@ -1130,9 +1169,9 @@ function dibujarFicha(k) {
   ctx.textBaseline = 'middle';
   ctx.font = `500 ${P.texto}px Barlow, sans-serif`;
   const w = Math.max(...lineas.map((l) => ctx.measureText(l).width)) + 22, h = lineas.length * 18 + 12;
-  let x = per.x + 22, y = per.y - h - 10;
-  if (x + w > P.W - 6) x = per.x - 22 - w;
-  if (y < 6) y = per.y + 22;
+  let x = per.vx + 22, y = per.vy - h - 10;
+  if (x + w > P.W - 6) x = per.vx - 22 - w;
+  if (y < 6) y = per.vy + 22;
   x = Math.max(6, x); y = Math.min(P.H - h - 6, y);
   rect(x, y, w, h, 8); ctx.fillStyle = C.tinta; ctx.globalAlpha = 0.95; ctx.fill(); ctx.globalAlpha = 1;
   lineas.forEach((l, i) => {
@@ -1244,12 +1283,12 @@ function dibujar() {
   const foco = dia.hover ?? dia.sel;
   if (foco !== null && foco < dia.personas.length) dibujarFoco(foco);
   // Despachadores, de arriba hacia abajo para que se superpongan bien
-  [...dia.personas.keys()].sort((a, b) => dia.personas[a].y - dia.personas[b].y).forEach((k) => {
+  [...dia.personas.keys()].sort((a, b) => dia.personas[a].vy - dia.personas[b].vy).forEach((k) => {
     const per = dia.personas[k], tr = per.trabajo, tramo = tr && tr.tramos[tr.fase];
     const accion = tramo && (tramo.tipo === 'recoger' || tramo.tipo === 'empacar' || tramo.tipo === 'revisar');
     const sentado = !per.activo && !per.ruta.length && per.lugar.sentado;
     const libre = per.activo && !tr && !per.ruta.length;     // libre en su mesa: mira a su alrededor
-    dibujarPersona(per.x, per.y, per.angVis + (libre ? 0.4 * Math.sin(dia.t * 0.2 + k * 1.7) : 0), {
+    dibujarPersona(per.vx, per.vy, per.angVis + (libre ? 0.4 * Math.sin(dia.t * 0.2 + k * 1.7) : 0), {
       ropa: '#ec7a1c', chaleco: true, piel: per.piel, pelo: per.pelo, camina: per.camina, paso: per.paso,
       carga: per.carga, colores: tr ? [0, 1, 2].map((i) => PRODUCTOS[(tr.id + i) % PRODUCTOS.length]) : null, accion, sentado, come: sentado, t: sentado ? dia.t * 0.7 + k : dia.t * 0.8,
       etiqueta: sentado ? null : `D${k + 1}`, etiquetaFondo: per.activo || tr ? C.acero : C['tinta-2'],
@@ -1339,7 +1378,7 @@ $('camaras').addEventListener('click', (e) => { const b = e.target.closest('butt
 function personaEn(e) {
   const r = lienzo.getBoundingClientRect(), x = ((e.clientX - r.left) * P.W) / r.width, y = ((e.clientY - r.top) * P.H) / r.height;
   let elegida = null, dmin = 22 * P.esc;
-  dia.personas.forEach((p, k) => { const d = Math.hypot(p.x - x, p.y - y); if (d < dmin) { dmin = d; elegida = k; } });
+  dia.personas.forEach((p, k) => { const d = Math.hypot(p.vx - x, p.vy - y); if (d < dmin) { dmin = d; elegida = k; } });
   return elegida;
 }
 lienzo.addEventListener('pointermove', (e) => {

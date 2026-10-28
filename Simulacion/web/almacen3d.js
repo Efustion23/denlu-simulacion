@@ -390,6 +390,8 @@ const Vista3D = (() => {
       r.rotation.x = Math.PI / 2; r.position.set(x, 0.42, z); r.castShadow = true;
       g.add(r); ruedas.push(r);
     }
+    const luces = [-0.8, 0.8].map((z) => caja(0.05, 0.14, 0.24, new THREE.MeshLambertMaterial({ color: '#7a1d18', emissive: '#000000' }), -0.03, 0.75, z, false));
+    luces.forEach((l) => g.add(l));
     const carga = [];
     for (let i = 0; i < CARGA_VIAJE; i++) {
       const m = caja(0.95, 0.6, 0.8, mat('#c19463'), 0.6 + (i % 3) * 1.25, 1.32, Math.floor(i / 3) ? 0.45 : -0.45);
@@ -397,7 +399,7 @@ const Vista3D = (() => {
     }
     const letrero = spriteTexto(' ', { fondo: '#141617', tam: 34 }, 0.36);
     letrero.position.set(4.9, 2.85, 0); g.add(letrero);
-    g.userData = { compuerta, ruedas, carga, letrero, giro: 0, humoT: 0 };
+    g.userData = { compuerta, ruedas, carga, letrero, luces, giro: 0, humoT: 0 };
     return g;
   }
 
@@ -453,6 +455,7 @@ const Vista3D = (() => {
     return { pos: obj.clone().add(new THREE.Vector3(-3.2, 3.6, 3.6)), obj };
   }
   function moverCamara(dt) {
+    if (siguiendo !== null && siguiendo >= dia.personas.length) { siguiendo = null; pintarBotonSeguir(); }
     if (tween) {
       tween.t = Math.min(1, tween.t + dt / 0.9);
       if (siguiendo !== null) tween.destino = destinoSeguir();
@@ -548,7 +551,7 @@ const Vista3D = (() => {
       const tr = per.trabajo, tramo = tr && tr.tramos[tr.fase];
       const sentado = !per.activo && !per.ruta.length && per.lugar.sentado;
       const libre = per.activo && !tr && !per.ruta.length;
-      g.position.set(X(per.x), 0, Z(per.y));
+      g.position.set(X(per.vx), 0, Z(per.vy));
       g.rotation.y = -(per.angVis + (libre ? 0.4 * Math.sin(dia.t * 0.2 + k * 1.7) : 0));
       const accion = tramo && ['recoger', 'empacar', 'revisar'].includes(tramo.tipo) ? tramo.tipo : null;
       const colores = tr ? [0, 1, 2].map((i) => PRODUCTOS[(tr.id + i) % PRODUCTOS.length]) : null;
@@ -558,8 +561,8 @@ const Vista3D = (() => {
       // Productos que saltan del estante (a la altura de las repisas) a los brazos
       if (accion === 'recoger') {
         const f = Math.min(1, (dia.t - tramo.t0) / Math.max(1e-6, tramo.t1 - tramo.t0)), a = per.angVis;
-        const s0 = new THREE.Vector3(X(per.x + Math.cos(a) * 30), 1.15, Z(per.y + Math.sin(a) * 30));
-        const m0 = new THREE.Vector3(X(per.x + Math.cos(a) * 12), 1.05, Z(per.y + Math.sin(a) * 12));
+        const s0 = new THREE.Vector3(X(per.vx + Math.cos(a) * 30), 1.15, Z(per.vy + Math.sin(a) * 30));
+        const m0 = new THREE.Vector3(X(per.vx + Math.cos(a) * 12), 1.05, Z(per.vy + Math.sin(a) * 12));
         for (let i = 0; i < 3 && r < recogida3.length; i++) {
           const g2 = (f - (0.1 + i * 0.28)) / 0.22, m = recogida3[r++];
           m.visible = g2 > 0;
@@ -627,15 +630,24 @@ const Vista3D = (() => {
     // Acopio: el encargado escribe mientras hace una lista; los palés muestran lo que se está revisando
     const enLista = dia.personas.map((p, k) => [k, avanceEn(p, 'lista')]).filter(([, f]) => f !== null).sort((x, y) => y[1] - x[1])[0];
     posar(encargado3, { accion: enLista ? 'empacar' : null, t: dia.t * 1.6 });
+    encargado3.rotation.y = -miradaEncargado(enLista);
     listaMostrador.visible = globoLista.visible = !!enLista;
     if (enLista) {
       const [k, f] = enLista;
       listaMostrador.userData.renglones.forEach((l, i) => { l.visible = i < Math.ceil(f * 4); });
-      ponerTexto(globoLista, `Lista de D${k + 1} · ${Math.round(f * 100)} %`, { fondo: '#3d7a5a', tam: 34 });
+      ponerTexto(globoLista, `Lista de D${k + 1} · ${Math.round(f * 10) * 10} %`, { fondo: '#3d7a5a', tam: 34 });
     }
     palets3.forEach((p, k) => {
       const per = dia.personas[k], f = avanceEn(per, 'revisar');
-      p.carga.forEach((m, i) => { m.visible = f !== null; if (f !== null) m.material = mat(PRODUCTOS[(per.trabajo.id + i) % PRODUCTOS.length]); });
+      p.carga.forEach((m, i) => {
+        m.visible = f !== null;
+        if (f === null) return;
+        m.material = mat(PRODUCTOS[(per.trabajo.id + i) % PRODUCTOS.length]);
+        // Del brazo al palé con un saltito, uno detrás de otro
+        const q = suave(Math.min(1, Math.max(0, (f - i * 0.04) / 0.12))), base = new THREE.Vector3((i - 1) * 0.32, 0.3, 0);
+        const mano = p.g.worldToLocal(new THREE.Vector3(X(per.vx + Math.cos(per.angVis) * 14), 1.05, Z(per.vy + Math.sin(per.angVis) * 14)));
+        m.position.lerpVectors(mano, base, q); m.position.y += Math.sin(q * Math.PI) * 0.3;
+      });
       p.revision.visible = f !== null;
       if (f !== null) ponerTexto(p.revision, `✓ ${Math.min(3, Math.floor(f * 3.6))} de 3`, { fondo: C.verde, tam: 34 });
     });
@@ -681,7 +693,7 @@ const Vista3D = (() => {
       else if (p.estado === 'tomando') {
         const per = dia.personas[p.est], tramo = per.trabajo && per.trabajo.tramos[1];
         const f = tramo ? suave(Math.min(1, (dia.t - tramo.t0) / Math.max(1e-6, tramo.t1 - tramo.t0))) : 1;
-        destino.set(X(per.x + Math.cos(per.angVis) * 12), 1.0, Z(per.y + Math.sin(per.angVis) * 12));
+        destino.set(X(per.vx + Math.cos(per.angVis) * 12), 1.0, Z(per.vy + Math.sin(per.angVis) * 12));
         destino.lerpVectors(new THREE.Vector3(BANDEJA[0], BANDEJA[1] + 0.03, BANDEJA[2]), destino, f);
         m.position.copy(destino); m.rotation.set(-Math.PI / 2 + f * 0.5, 0, 0); m.scale.setScalar(1 - 0.3 * f);
         continue;
@@ -719,6 +731,8 @@ const Vista3D = (() => {
       g.position.set(x, 0, Z(b.camion[1]));
       u.ruedas.forEach((r) => { r.rotation.y = -u.giro; });
       u.compuerta.rotation.z = (Math.PI / 2) * c.puerta;
+      const prende = c.fase === 'volviendo' && (reducirMovimiento || Math.sin(performance.now() / 120) > 0);   // retroceso: parpadean
+      u.luces.forEach((l) => { l.material.emissive.set(prende ? '#ff2a1f' : '#000000'); });
       const n = c.fase === 'volviendo' ? 0 : Math.min(c.carga, CARGA_VIAJE);
       u.carga.forEach((m, i) => { m.visible = i < n; m.scale.setScalar(i === n - 1 ? 1 + 0.35 * c.pop : 1); });
       ponerTexto(u.letrero, c.fase === 'anden' ? `Ruta ${k + 1} · ${n} de ${CARGA_VIAJE}` : `Ruta ${k + 1} · en camino`, { fondo: '#141617', tam: 34 });
