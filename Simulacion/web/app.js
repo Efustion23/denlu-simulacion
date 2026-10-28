@@ -354,6 +354,12 @@ const VEL_CAMINAR = 70;                                   // px por minuto simul
 const lienzo = $('lienzo'), ctx = lienzo.getContext('2d');
 const dpr = window.devicePixelRatio || 1;
 const pantallaChica = matchMedia('(max-width: 700px)');
+// La vista 3D (almacen3d.js) se usa si el navegador tiene WebGL; si no, queda el plano 2D.
+// En 3D siempre se usa el plano apaisado, también en el teléfono.
+const hayWebGL = typeof THREE !== 'undefined' && (() => {
+  try { const c = document.createElement('canvas'); return !!(c.getContext('webgl2') || c.getContext('webgl')); } catch (e) { return false; }
+})();
+let vista3D = hayWebGL;
 
 // Dos planos del mismo almacén: apaisado en pantalla ancha y apilado en el teléfono.
 // `red` son los pasillos (segmentos horizontales o verticales) por donde camina la gente.
@@ -475,7 +481,7 @@ function puntoEn(pts, d) {
 }
 
 function configurarLienzo() {
-  P = pantallaChica.matches ? PLANOS.angosto : PLANOS.ancho;
+  P = pantallaChica.matches && !vista3D ? PLANOS.angosto : PLANOS.ancho;
   if (!P.nodos) prepararRed();
   lienzo.width = P.W * dpr; lienzo.height = P.H * dpr;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -1214,7 +1220,30 @@ $('play').addEventListener('click', () => {
 $('reiniciar').addEventListener('click', () => nuevoDia());
 $('otroDia').addEventListener('click', () => { semillaDia++; nuevoDia(); ponerReproduccion(true); });
 $('velocidad').addEventListener('change', (e) => { velocidad = Number(e.target.value); });
-pantallaChica.addEventListener('change', () => { configurarLienzo(); nuevoDia(); });
+// Cambia de plano (apaisado o apilado) sin perder la hora: rehace el día y lo adelanta hasta donde iba
+function rehacerPlano() {
+  const antes = P;
+  configurarLienzo();
+  if (P === antes || !dia) return;
+  const t = dia.t, seguia = reproduciendo;
+  nuevoDia();
+  while (dia.t < t) { const a = dia.t; dia.t = Math.min(t, dia.t + 0.5); avanzar(dia.t); mover(0.05, dia.t - a); }
+  dia.avisos = []; dia.burbujas = [];
+  pintarContadores();
+  ponerReproduccion(seguia);
+}
+pantallaChica.addEventListener('change', rehacerPlano);
+function ponerVista(tres) {
+  vista3D = tres && hayWebGL;
+  $('lienzo').hidden = vista3D;
+  $('escena3d').hidden = !vista3D;
+  $('camaras').hidden = $('pista3d').hidden = !vista3D;
+  document.querySelectorAll('#vista button').forEach((b) => b.setAttribute('aria-pressed', (b.dataset.vista === '3d') === vista3D));
+  rehacerPlano();
+  if (vista3D && typeof Vista3D !== 'undefined') Vista3D.activar();
+}
+$('vista').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) ponerVista(b.dataset.vista === '3d'); });
+$('camaras').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) Vista3D.irVista(b.dataset.cam); });
 function personaEn(e) {
   const r = lienzo.getBoundingClientRect(), x = ((e.clientX - r.left) * P.W) / r.width, y = ((e.clientY - r.top) * P.H) / r.height;
   let elegida = null, dmin = 22 * P.esc;
@@ -1258,7 +1287,9 @@ function cuadro(ms) {
     if (graficos.dia && ms - ultimoGrafico > 150) { graficos.dia.update(); ultimoGrafico = ms; }
   }
   mover(corre ? dt : 0, dia.t - antes);
-  dibujar();
+  // almacen3d.js se carga después de este archivo: hasta entonces el primer cuadro no dibuja el 3D
+  if (!vista3D) dibujar();
+  else if (typeof Vista3D !== 'undefined') Vista3D.cuadro(dt);
   const frase = narrar();
   if ($('narracion').textContent !== frase) $('narracion').textContent = frase;
   requestAnimationFrame(cuadro);
@@ -1273,6 +1304,8 @@ pintarTablas();
 pintarCascada();
 crearGraficos();
 cambioPlan();
+ponerVista(hayWebGL);
+if (!hayWebGL) $('vistaBarra').hidden = true;
 if (!window.Chart) {
   document.querySelectorAll('.grafico').forEach((g) => { g.innerHTML = '<p>No se pudo cargar Chart.js (vendor/chart.umd.js).</p>'; g.style.height = 'auto'; });
 }
