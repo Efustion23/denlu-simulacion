@@ -365,7 +365,7 @@ let vista3D = hayWebGL;
 // `red` son los pasillos (segmentos horizontales o verticales) por donde camina la gente.
 const PLANOS = {
   ancho: {
-    W: 960, H: 560, esc: 1.2, escCamion: 1, texto: 13, aviso: [555, 38],
+    W: 960, H: 600, esc: 1.2, escCamion: 1, texto: 13, aviso: [555, 38],
     reloj: { x: 16, y: 14, w: 116, h: 48, fuente: 36, textoX: 146, y1: 30, y2: 50 },
     oficina: { x: 16, y: 76, w: 230, h: 120, escritorio: [30, 102, 156, 20], vendedores: [[60, 140], [160, 140]], impresora: [200, 102, 32, 24] },
     tablero: { x: 16, y: 210, w: 230, h: 200, gx: 26, gy: 238, cols: 5, filas: 4, cw: 38, ch: 42, bandeja: [220, 282], bandejaRect: [216, 270, 26, 56] },
@@ -375,13 +375,18 @@ const PLANOS = {
     estantes: { x: 290, w: 380, alto: 26, filas: [92, 172, 252, 332], pasillos: [145, 225, 305] },
     mesas: { x: 290, w: 380, y: 414, alto: 26, pie: 398, ang: Math.PI / 2 },
     recoger: { punto: [268, 300], ang: Math.PI },
-    anden: { franja: [712, 66, 8, 400], ang: 0, dir: 0, clip: [720, 0, 240, 560],
+    // Zona de acopio: el encargado hace en su mostrador la lista de productos de cada pedido y en los
+    // palés se juntan y revisan los productos contra esa lista antes de empacar
+    acopio: { x: 290, y: 514, w: 398, h: 80, mostrador: [298, 520, 72, 22], encargado: [334, 564], pie: [334, 505], pieY: 505,
+      palet: (k) => [392 + (k % 6) * 48, 520, 40, 30], etiqueta: [404, 592] },
+    anden: { franja: [712, 66, 8, 400], ang: 0, dir: 0, clip: [720, 0, 240, 600],
       bahias: [110, 260, 410].map((y) => ({ pie: [702, y], red: [688, y], camion: [728, y], texto: [728, y - 36], pila: [692, y + 30] })) },
-    red: [[268, 145, 268, 492], [268, 398, 688, 398], [688, 110, 688, 410], [268, 145, 688, 145], [268, 225, 688, 225], [268, 305, 688, 305]],
+    red: [[268, 145, 268, 505], [268, 398, 688, 398], [688, 110, 688, 505], [268, 145, 688, 145], [268, 225, 688, 225], [268, 305, 688, 305],
+      [268, 505, 688, 505]],
     etiquetas: [['Estantería', 290, 80], ['Mesas de empaque', 290, 462], ['Andén de carga', 728, 52]],
   },
   angosto: {
-    W: 420, H: 736, esc: 1, escCamion: 0.85, texto: 12, aviso: [210, 240],
+    W: 420, H: 802, esc: 1, escCamion: 0.85, texto: 12, aviso: [210, 240],
     reloj: { x: 12, y: 10, w: 100, h: 42, fuente: 30, textoX: 124, y1: 24, y2: 44 },
     oficina: { x: 12, y: 62, w: 396, h: 96, escritorio: [30, 84, 250, 18], vendedores: [[96, 122], [214, 122]], impresora: [330, 96, 40, 26] },
     tablero: { x: 12, y: 168, w: 396, h: 116, gx: 22, gy: 194, cols: 9, filas: 2, cw: 37, ch: 44, bandeja: [372, 210], bandejaRect: [364, 196, 28, 74] },
@@ -391,9 +396,12 @@ const PLANOS = {
     estantes: { x: 126, w: 278, alto: 22, filas: [318, 378, 438], pasillos: [359, 419] },
     mesas: { x: 126, w: 278, y: 496, alto: 22, pie: 484, ang: Math.PI / 2 },
     recoger: { punto: [381, 300], ang: -Math.PI / 2 },
-    anden: { franja: [12, 566, 396, 8], ang: Math.PI / 2, dir: 1, clip: [0, 574, 420, 146],
-      bahias: [76, 210, 344].map((x) => ({ pie: [x, 558], red: [x, 550], camion: [x, 582], texto: [x, 730], pila: [x + 26, 548] })) },
-    red: [[20, 300, 400, 300], [110, 300, 110, 550], [110, 359, 404, 359], [110, 419, 404, 419], [110, 484, 404, 484], [30, 550, 390, 550]],
+    acopio: { x: 120, y: 556, w: 288, h: 46, mostrador: [128, 560, 54, 18], encargado: [155, 590], pie: [155, 550], pieY: 550,
+      palet: (k) => [196 + (k % 6) * 35, 560, 30, 24], etiqueta: [300, 612] },
+    anden: { franja: [12, 628, 396, 8], ang: Math.PI / 2, dir: 1, clip: [0, 636, 420, 166],
+      bahias: [76, 210, 344].map((x) => ({ pie: [x, 620], red: [x, 612], camion: [x, 644], texto: [x, 796], pila: [x + 34, 616] })) },
+    red: [[20, 300, 400, 300], [110, 300, 110, 612], [110, 359, 404, 359], [110, 419, 404, 419], [110, 484, 404, 484], [110, 550, 404, 550],
+      [30, 612, 390, 612]],
     etiquetas: [['Estantería', 126, 312], ['Mesas de empaque', 126, 530]],
   },
 };
@@ -449,6 +457,8 @@ const mesaRect = (k) => {
 const lugarMesa = (k) => ({ punto: [mesaRect(k).cx, P.mesas.pie], ang: P.mesas.ang, salida: [] });
 const lugarTablero = () => ({ punto: P.recoger.punto, ang: P.recoger.ang, salida: [] });
 const lugarAsiento = (k) => { const a = P.comedor.asientos[k % 6]; return { punto: [a[0], a[1]], ang: a[2], salida: P.comedor.puerta, sentado: true }; };
+const lugarMostrador = () => ({ punto: P.acopio.pie, ang: Math.PI / 2, salida: [] });
+const lugarPalet = (k) => { const [x, , w] = P.acopio.palet(k); return { punto: [x + w / 2, P.acopio.pieY], ang: Math.PI / 2, salida: [] }; };
 const lugarBahia = (k) => { const b = P.anden.bahias[k]; return { punto: b.pie, ang: P.anden.ang, salida: [b.red] }; };
 // El pedido `id` está en un estante al azar (fijo para ese pedido): pasillo, posición y lado
 function lugarEstante(id) {
@@ -545,21 +555,29 @@ function irA(per, lugar) {
   if (!per.ruta.length) per.lugar = lugar;
 }
 
-// Reparte el tiempo de despacho del modelo entre las etapas: 40 % caminando (según la distancia)
-// y el resto en tomar la hoja, recoger en el estante y empacar en la mesa.
+// Reparte el tiempo de despacho del modelo (44.5 min en promedio) entre las etapas: 40 % caminando
+// (según la distancia) y el resto quieto. Supuesto de la animación: en el acopio, hacer la lista de
+// productos toma 15 % y juntar y revisar los productos contra la lista otro 15 %; recoger en el
+// estante 15 %, empacar 12 % y tomar la hoja del tablero 3 %. Todo cabe en el mismo tiempo de despacho.
+const PARTE = { hoja: 0.03, lista: 0.15, recoger: 0.15, revisar: 0.15, empacar: 0.12 };
 function asignar(per, ev) {
-  const k = ev.est, tablero = lugarTablero(), estante = lugarEstante(ev.id), mesa = lugarMesa(k);
-  const c = [camino(desdePersona(per), tablero), camino(desdeLugar(tablero), estante), camino(desdeLugar(estante), mesa),
-    camino(desdeLugar(mesa), lugarBahia(1))];
+  const k = ev.est, tablero = lugarTablero(), mostrador = lugarMostrador(), estante = lugarEstante(ev.id), palet = lugarPalet(k), mesa = lugarMesa(k);
+  const c = [camino(desdePersona(per), tablero), camino(desdeLugar(tablero), mostrador), camino(desdeLugar(mostrador), estante),
+    camino(desdeLugar(estante), palet), camino(desdeLugar(palet), mesa), camino(desdeLugar(mesa), lugarBahia(1))];
   const L = c.map(largo), total = L.reduce((a, b) => a + b, 0);
   const caminar = total > 0 ? 0.4 : 0, quieto = (1 - caminar) / 0.6;
-  const partes = [['camino', c[0], L[0]], ['hoja', tablero, 0.04 * quieto], ['camino', c[1], L[1]], ['recoger', estante, 0.26 * quieto],
-    ['camino', c[2], L[2]], ['empacar', mesa, 0.30 * quieto], ['camino', c[3], L[3]]];
+  // [tipo, etapa, lugar o camino, peso]
+  const partes = [['camino', 'alTablero', c[0], L[0]], ['hoja', 'hoja', tablero, PARTE.hoja * quieto],
+    ['camino', 'alMostrador', c[1], L[1]], ['lista', 'lista', mostrador, PARTE.lista * quieto],
+    ['camino', 'alEstante', c[2], L[2]], ['recoger', 'recoger', estante, PARTE.recoger * quieto],
+    ['camino', 'alPalet', c[3], L[3]], ['revisar', 'revisar', palet, PARTE.revisar * quieto],
+    ['camino', 'aLaMesa', c[4], L[4]], ['empacar', 'empacar', mesa, PARTE.empacar * quieto],
+    ['camino', 'alCamion', c[5], L[5]]];
   let t = ev.t;
-  const tramos = partes.map(([tipo, dato, x]) => {
+  const tramos = partes.map(([tipo, etapa, dato, x]) => {
     const t0 = t;
     t += ev.dur * (tipo === 'camino' ? (total ? (caminar * x) / total : 0) : x);
-    return { tipo, dato, t0, t1: t };
+    return { tipo, etapa, dato, t0, t1: t };
   });
   per.trabajo = { id: ev.id, mesa: k, tramos, fase: -1, camion: null };
   per.ruta = [];
@@ -576,19 +594,28 @@ function elegirCamion() {
   return k;
 }
 
+// Lo que lleva en las manos cambia en cada etapa: la hoja del pedido, la lista de productos que hizo
+// el encargado de acopio, los productos recogidos y, al final, la caja empacada
 function entrarEtapa(per, i) {
   const tr = per.trabajo, tramo = tr.tramos[i];
-  if (tramo.tipo === 'hoja') {
+  if (tramo.etapa === 'hoja') {
     const p = dia.pedidos.get(tr.id);
     if (p) Object.assign(p, { estado: 'tomando', x0: p.x, y0: p.y });
-  } else if (i === 2) { dia.pedidos.delete(tr.id); per.carga = 'hoja'; }
-  else if (i === 4) per.carga = 'caja';                    // sale del estante con la mercadería
-  else if (tramo.tipo === 'empacar') per.carga = null;      // la caja queda en la mesa
-  else if (i === 6) {
+  } else if (tramo.etapa === 'alMostrador') { dia.pedidos.delete(tr.id); per.carga = 'hoja'; }
+  else if (tramo.etapa === 'alEstante') per.carga = 'lista';
+  else if (tramo.etapa === 'alPalet' || tramo.etapa === 'aLaMesa') per.carga = 'productos';
+  else if (tramo.etapa === 'revisar' || tramo.etapa === 'empacar') per.carga = null;   // quedan en el palé o en la mesa
+  else if (tramo.etapa === 'alCamion') {
     per.carga = 'caja';
     tr.camion = elegirCamion();
     tramo.dato = camino(desdeLugar(lugarMesa(tr.mesa)), lugarBahia(tr.camion));
   }
+}
+// Avance (0 a 1) de la etapa en curso de un despachador, si está en la etapa `etapa`
+function avanceEn(per, etapa) {
+  const tr = per && per.trabajo, tramo = tr && tr.tramos[tr.fase];
+  if (!tramo || tramo.etapa !== etapa) return null;
+  return Math.min(1, (dia.t - tramo.t0) / Math.max(1e-6, tramo.t1 - tramo.t0));
 }
 function seguirTrabajo(per, t) {
   const tr = per.trabajo;
@@ -843,11 +870,20 @@ function dibujarPersona(x, y, ang, o) {
   }
   let brazos;
   if (o.carga === 'caja') { cajaDibujo(5, -8, 13, 16); brazos = [[9, -8.5], [9, 8.5]]; }
+  else if (o.carga === 'productos') {
+    (o.colores || PRODUCTOS).slice(0, 3).forEach((c, i) => { ctx.fillStyle = c; ctx.fillRect(6 + (i === 1 ? 5 : 0), -7 + i * 5, 7, 7); });
+    brazos = [[9, -8.5], [9, 8.5]];
+  }
   else if (o.accion) brazos = [[5 + 3 * Math.sin(o.t), -8], [5 + 3 * Math.sin(o.t + Math.PI), 8]];
   else if (o.telefono) brazos = [[3, -8], [6, 6]];
   else if (o.come) brazos = [[6, -7], [4 + 3 * Math.max(0, Math.sin(o.t)), 7 - 4 * Math.max(0, Math.sin(o.t))]];
   else brazos = [[-s * 4.5, -9.5], [s * 4.5, 9.5]];
   ctx.fillStyle = o.piel; brazos.forEach(([bx, by]) => circulo(bx, by, 2.9));
+  if (o.carga === 'lista') {                                // tablilla con la lista de productos
+    ctx.fillStyle = '#8a643a'; ctx.fillRect(7, 1, 8, 11);
+    ctx.fillStyle = '#fbfaf6'; ctx.fillRect(8, 2.5, 6, 8.5);
+    ctx.fillStyle = C.verde; ctx.fillRect(9, 4, 4, 1); ctx.fillRect(9, 6.5, 4, 1); ctx.fillRect(9, 9, 4, 1);
+  }
   if (o.carga === 'hoja') { ctx.fillStyle = '#fbfaf6'; ctx.fillRect(8, 3, 6, 8); ctx.strokeStyle = 'rgba(0,0,0,0.3)'; ctx.lineWidth = 0.8; ctx.strokeRect(8, 3, 6, 8); }
   ctx.fillStyle = o.pelo; circulo(-0.5, 0, 5.8);
   ctx.fillStyle = o.piel; elipse(2.8, 0, 2.6, 3.8);       // la cara, hacia adelante
@@ -895,6 +931,56 @@ function dibujarEstantes() {
     ctx.fillStyle = C['tinta-2'];
     for (let x = e.x; x <= e.x + e.w; x += e.w / 6) ctx.fillRect(Math.min(x, e.x + e.w - 3), y, 3, e.alto);   // parantes
   });
+}
+
+// Zona de acopio: marca en el piso, mostrador del encargado (con la lista que está haciendo) y un palé
+// por despachador donde se juntan sus productos y se revisan contra la lista
+function dibujarAcopio() {
+  const a = P.acopio;
+  ctx.save();
+  ctx.setLineDash([8, 6]); ctx.strokeStyle = C.seguridad; ctx.lineWidth = 2.5;
+  ctx.strokeRect(a.x, a.y, a.w, a.h); ctx.restore();
+  ctx.fillStyle = C['tinta-2']; ctx.font = `600 ${P.texto}px Barlow, sans-serif`; ctx.textBaseline = 'alphabetic';
+  ctx.fillText('Zona de acopio', ...a.etiqueta);
+  const [mx, my, mw, mh] = a.mostrador;
+  rect(mx, my, mw, mh, 3); ctx.fillStyle = C.carton; ctx.globalAlpha = 0.6; ctx.fill(); ctx.globalAlpha = 1;
+  ctx.fillStyle = C['tinta-2']; ctx.fillRect(mx + mw - 16, my + 4, 12, 10);   // impresora de listas
+  // La lista que el encargado está haciendo: renglones que aparecen y un anillo de avance
+  const quien = dia.personas.map((p, k) => [k, avanceEn(p, 'lista')]).filter(([, f]) => f !== null).sort((x, y) => y[1] - x[1])[0];
+  if (quien) {
+    const [k, f] = quien, hx = mx + 10, hy = my + 2;
+    ctx.fillStyle = '#fbfaf6'; ctx.fillRect(hx, hy, 16, mh - 4);
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    for (let i = 0; i < Math.ceil(f * 4); i++) ctx.fillRect(hx + 3, hy + 3 + i * 4, 10, 1.4);
+    ctx.lineWidth = 2.5; ctx.lineCap = 'round'; ctx.strokeStyle = C.verde; ctx.beginPath();
+    ctx.arc(hx + 8, my + mh / 2, 12, -Math.PI / 2, -Math.PI / 2 + 2 * Math.PI * f); ctx.stroke(); ctx.lineCap = 'butt';
+    ctx.fillStyle = C.verde; ctx.font = `600 ${P.texto - 2}px Barlow, sans-serif`; ctx.textBaseline = 'middle';
+    ctx.fillText(`D${k + 1}`, mx + 30, my + mh / 2);              // de quién es la lista
+  }
+  for (let k = 0; k < dia.cap; k++) {
+    const [px, py, pw, ph] = a.palet(k);
+    rect(px, py, pw, ph, 2); ctx.fillStyle = '#b48a5a'; ctx.fill();
+    ctx.fillStyle = 'rgba(0,0,0,0.18)';
+    for (let i = 1; i < 4; i++) ctx.fillRect(px + 2, py + (ph * i) / 4, pw - 4, 1.2);   // tablas del palé
+    ctx.fillStyle = C['tinta-2']; ctx.font = `500 ${P.texto - 3}px Barlow, sans-serif`; ctx.textBaseline = 'alphabetic';
+    ctx.fillText(`D${k + 1}`, px + 2, py + ph + 10);
+    const per = dia.personas[k], f = avanceEn(per, 'revisar');
+    if (f === null) continue;
+    // Los productos del pedido sobre el palé y la lista con un visto por cada producto revisado
+    const id = per.trabajo.id, revisados = Math.min(3, Math.floor(f * 3.6));
+    for (let i = 0; i < 3; i++) { ctx.fillStyle = PRODUCTOS[(id + i) % PRODUCTOS.length]; ctx.fillRect(px + 3 + (i % 2) * 9, py + 3 + Math.floor(i / 2) * 9, 8, 8); }
+    const lx = px + pw - 15, ly = py + 2;
+    ctx.fillStyle = '#fbfaf6'; ctx.fillRect(lx, ly, 13, ph - 4);
+    ctx.strokeStyle = C.verde; ctx.lineWidth = 1.6;
+    for (let i = 0; i < 3; i++) {
+      const y = ly + 5 + i * ((ph - 8) / 3);
+      ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.fillRect(lx + 5, y - 0.5, 6, 1.2);
+      if (i < revisados) { ctx.beginPath(); ctx.moveTo(lx + 1.5, y); ctx.lineTo(lx + 2.8, y + 1.5); ctx.lineTo(lx + 4.5, y - 2); ctx.stroke(); }
+    }
+  }
+  // El encargado, detrás de su mostrador: escribe mientras hace una lista
+  const [ex, ey] = a.encargado;
+  dibujarPersona(ex, ey, -Math.PI / 2, { ropa: '#3d7a5a', piel: PIEL[4], pelo: PELO[1], accion: !!quien, t: dia.t * 1.6 });
 }
 
 function dibujarMesas() {
@@ -1007,12 +1093,17 @@ function rutaPendiente(per) {
   return pts;
 }
 
-const ETAPAS = ['Va al tablero por la hoja del pedido', 'Toma la hoja del pedido', 'Camina al estante', 'Recoge la mercadería',
-  'Lleva la mercadería a su mesa', 'Empaca el pedido', 'Lleva la caja al camión'];
+const ETAPAS = {
+  alTablero: 'Va al tablero por la hoja del pedido', hoja: 'Toma la hoja del pedido', alMostrador: 'Lleva el pedido al acopio',
+  lista: 'El encargado de acopio hace la lista de productos', alEstante: 'Va a los estantes con la lista', recoger: 'Recoge los productos de la lista',
+  alPalet: 'Lleva los productos a la zona de acopio', revisar: 'Junta y revisa los productos contra la lista', aLaMesa: 'Lleva los productos a su mesa',
+  empacar: 'Empaca el pedido', alCamion: 'Lleva la caja al camión',
+};
 function queHace(per) {
   if (per.trabajo) {
     const tr = per.trabajo;
-    return [ETAPAS[tr.fase] + (tr.fase === 6 ? ` de la ruta ${tr.camion + 1}` : ''), `Pedido n.º ${tr.id + 1} · esperó ${Math.round(tr.espera)} min en el tablero`];
+    const etapa = tr.tramos[tr.fase].etapa;
+    return [ETAPAS[etapa] + (etapa === 'alCamion' ? ` de la ruta ${tr.camion + 1}` : ''), `Pedido n.º ${tr.id + 1} · esperó ${Math.round(tr.espera)} min en el tablero`];
   }
   if (!per.activo) return [per.ruta.length ? 'Va al comedor' : 'En el comedor: almuerzo o fuera de turno'];
   return [per.ruta.length ? 'Vuelve a su mesa' : 'Libre: espera el próximo pedido'];
@@ -1126,6 +1217,7 @@ function dibujar() {
 
   dibujarEstantes();
   dibujarMesas();
+  dibujarAcopio();
   ctx.fillStyle = C['tinta-2']; ctx.font = `500 ${P.texto}px Barlow, sans-serif`; ctx.textBaseline = 'alphabetic';
   P.etiquetas.forEach(([texto, x, y]) => ctx.fillText(texto, x, y));
 
@@ -1154,12 +1246,12 @@ function dibujar() {
   // Despachadores, de arriba hacia abajo para que se superpongan bien
   [...dia.personas.keys()].sort((a, b) => dia.personas[a].y - dia.personas[b].y).forEach((k) => {
     const per = dia.personas[k], tr = per.trabajo, tramo = tr && tr.tramos[tr.fase];
-    const accion = tramo && (tramo.tipo === 'recoger' || tramo.tipo === 'empacar');
+    const accion = tramo && (tramo.tipo === 'recoger' || tramo.tipo === 'empacar' || tramo.tipo === 'revisar');
     const sentado = !per.activo && !per.ruta.length && per.lugar.sentado;
     const libre = per.activo && !tr && !per.ruta.length;     // libre en su mesa: mira a su alrededor
     dibujarPersona(per.x, per.y, per.angVis + (libre ? 0.4 * Math.sin(dia.t * 0.2 + k * 1.7) : 0), {
       ropa: '#ec7a1c', chaleco: true, piel: per.piel, pelo: per.pelo, camina: per.camina, paso: per.paso,
-      carga: per.carga, accion, sentado, come: sentado, t: sentado ? dia.t * 0.7 + k : dia.t * 0.8,
+      carga: per.carga, colores: tr ? [0, 1, 2].map((i) => PRODUCTOS[(tr.id + i) % PRODUCTOS.length]) : null, accion, sentado, come: sentado, t: sentado ? dia.t * 0.7 + k : dia.t * 0.8,
       etiqueta: sentado ? null : `D${k + 1}`, etiquetaFondo: per.activo || tr ? C.acero : C['tinta-2'],
     });
     if (tramo && tramo.tipo === 'recoger') dibujarRecogida(per, tramo, tr.id);

@@ -113,7 +113,7 @@
           <h2 id="tDia"><span class="num">4</span>Un día en el almacén</h2>
           <span class="estado" id="estadoDia" aria-live="polite"></span>
         </div>
-        <p class="nota-bloque">El almacén en 3D (o en plano 2D). Los pedidos llegan por teléfono y vendedores, se imprimen y esperan en el tablero. Cada despachador toma una hoja, recoge la mercadería en los estantes, la empaca en su mesa y la lleva al camión de su ruta; en el almuerzo o fuera de turno está en el comedor. Es una ilustración que no forma parte de <code>Denlu.ipynb</code>: un día simulado pedido por pedido con las tasas λ por hora del diagnóstico y μ = 44.5 min. Supone que un pedido que espera más de 20 min pierde su ruta y, a veces, el cliente cancela.</p>
+        <p class="nota-bloque">El almacén en 3D (o en plano 2D). Los pedidos llegan por teléfono y vendedores, se imprimen y esperan en el tablero. Cada despachador toma una hoja y la lleva a la <strong>zona de acopio</strong>, donde el encargado hace la lista de productos del pedido; con esa lista recoge la mercadería en los estantes, la junta en su palé del acopio y la revisa contra la lista, la empaca en su mesa y la lleva al camión de su ruta. En el almuerzo o fuera de turno está en el comedor. Es una ilustración que no forma parte de <code>Denlu.ipynb</code>: un día simulado pedido por pedido con las tasas λ por hora del diagnóstico y μ = 44.5 min. Supone que un pedido que espera más de 20 min pierde su ruta y, a veces, el cliente cancela, y que en el acopio hacer la lista y revisar los productos toman cerca del 15 % del tiempo de despacho cada uno (unos 6.7 de los 44.5 min): son parte de ese tiempo, así que las cifras no cambian.</p>
         <div class="selector-plan">
           <div class="segmentado" id="presets" role="group" aria-label="Quién atiende el día"></div>
           <p class="costo"><span id="costoMes"></span> al mes <span class="costo-gente" id="totalPersonas"></span></p>
@@ -128,6 +128,7 @@
             <button type="button" data-cam="general">General</button>
             <button type="button" data-cam="ventas">Ventas y tablero</button>
             <button type="button" data-cam="estantes">Estantes</button>
+            <button type="button" data-cam="acopio">Acopio</button>
             <button type="button" data-cam="anden">Andén</button>
             <button type="button" data-cam="seguir">Seguir a D1</button>
           </div>
@@ -139,6 +140,7 @@
           <li><span class="sw sw-hoja sw-perdio"></span><span>Esperó más de <strong id="leyendaT">20</strong> min y perdió su camión</span></li>
           <li><span class="sw sw-hoja sw-cancelo"></span><span>El cliente canceló</span></li>
           <li><span class="sw sw-desp"></span><span>Despachador (D1, D2…) con chaleco</span></li>
+          <li><span class="sw sw-acopio"></span><span>Zona de acopio: el encargado hace la lista y ahí se juntan y revisan los productos</span></li>
           <li><span class="sw sw-caja"></span><span>Caja del pedido: se recoge, se empaca y va al camión</span></li>
           <li><span class="sw sw-toque"></span><span>Pasa el mouse o toca a un despachador para ver qué hace y su recorrido</span></li>
         </ul>
