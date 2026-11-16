@@ -514,3 +514,123 @@ html { scroll-behavior: smooth; }
   .avisos3d { top: 66px; width: calc(100% - 24px); }
   .avisos3d p { white-space: normal; text-align: center; font-size: 12px; }
 }
+
+/* ---------- Notebook 2025: demostración de la cola, despachadores por hora, métricas ---------- */
+@media (max-width: 1180px) { .pasos .txt { display: none; } .pasos a { padding: 6px 8px; } }
+.sub { margin: 26px 0 10px; font-size: 15px; font-weight: 600; }
+.formulas { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 0 0 6px; }
+.formulas > div { padding: 12px 14px; border: 1px solid var(--linea); border-radius: 10px; background: var(--panel); }
+.formulas .f-et { display: block; margin-bottom: 4px; color: var(--tinta-2); font-size: 12px; }
+.formulas .f { font-size: 15px; font-weight: 500; }
+
+/* Demo en vivo de la cola */
+.demo { padding: 16px; border: 1px solid var(--linea); border-radius: 12px; }
+.demo-controles { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; margin-bottom: 12px; }
+.horas.horas-chicas { margin: 0; gap: 4px; }
+.horas.horas-chicas button { min-width: 44px; height: 30px; padding: 0 8px; font-size: 13px; }
+.horas.horas-chicas button[aria-pressed="true"] { background: var(--tinta); border-color: var(--tinta); color: var(--hoja); }
+.horas.horas-chicas button.critica[aria-pressed="true"] { background: var(--rojo); border-color: var(--rojo); color: #fff; }
+.stepper { display: inline-flex; align-items: center; gap: 8px; color: var(--tinta-2); font-size: 13px; }
+.stepper button, .hora-celda .paso button {
+  width: 30px; height: 30px; border: 1px solid var(--control); border-radius: 50%; background: var(--boton);
+  color: var(--tinta); font-size: 17px; line-height: 1; cursor: pointer; transition: background-color 150ms var(--curva), transform 100ms var(--curva);
+}
+.stepper button:hover, .hora-celda .paso button:hover { background: var(--activo); }
+.stepper button:active, .hora-celda .paso button:active { transform: scale(0.9); }
+.stepper strong { min-width: 1.4em; color: var(--tinta); font-size: 20px; text-align: center; }
+.primario-chico { height: 32px; padding: 0 16px; border: 1px solid var(--primario); border-radius: 999px; background: var(--primario); color: var(--primario-tinta); font-weight: 600; cursor: pointer; }
+.demo-cuerpo { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+.demo-lienzo { overflow: hidden; border-radius: 8px; background: var(--suelo); }
+.demo-lienzo canvas { display: block; width: 100%; }
+.demo-hora { margin: 0 0 10px; font-size: 14px; line-height: 1.4; }
+.mini-kpis { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 0 0 10px; }
+.mini-kpis div { padding: 8px 10px; border-radius: 8px; background: var(--panel); }
+.mini-kpis dt { color: var(--tinta-2); font-size: 12px; }
+.mini-kpis dd { margin: 2px 0 0; font-size: 20px; font-weight: 600; }
+.mini-kpis.vivo dd { color: var(--carton-borde); }
+.demo-veredicto { margin: 0 0 10px; padding: 10px 12px; border-left: 3px solid var(--control); font-size: 14px; font-weight: 500; line-height: 1.4; }
+.demo-veredicto.ok { border-color: var(--verde); }
+.demo-veredicto.medio { border-color: var(--seguridad); }
+.demo-veredicto.mal { border-color: var(--rojo); color: var(--rojo); }
+.pie-demo { margin: 10px 0 0; color: var(--tinta-2); font-size: 12px; }
+
+/* Evidencia del CSV */
+.evidencia { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 0 0 16px; }
+.evidencia div { padding: 14px; border: 1px solid var(--linea); border-radius: 10px; animation: aparecer 500ms var(--curva) both; }
+.evidencia div:nth-child(2) { animation-delay: 80ms; } .evidencia div:nth-child(3) { animation-delay: 160ms; } .evidencia div:nth-child(4) { animation-delay: 240ms; }
+.evidencia dt { color: var(--rojo); font-size: 26px; font-weight: 600; line-height: 1.1; }
+.evidencia dd { margin: 6px 0 0; color: var(--tinta-2); font-size: 13px; }
+
+/* Simulador de despachadores por hora */
+.horario { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 6px; margin: 4px 0 12px; }
+.hora-celda {
+  display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px 4px; border: 1px solid var(--linea);
+  border-top: 4px solid var(--control); border-radius: 8px; transition: border-color 250ms var(--curva), background-color 250ms var(--curva);
+}
+.hora-celda.ok { border-top-color: var(--verde); }
+.hora-celda.medio { border-top-color: var(--seguridad); background: color-mix(in srgb, var(--seguridad) 7%, transparent); }
+.hora-celda.mal { border-top-color: var(--rojo); background: color-mix(in srgb, var(--rojo) 7%, transparent); }
+.hora-celda.pulso { animation: pulso 450ms var(--curva); }
+@keyframes pulso { 40% { transform: scale(1.05); } }
+.hora-celda .hh { color: var(--tinta-2); font-size: 12px; font-weight: 500; }
+.hora-celda .paso { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.hora-celda .paso button { width: 26px; height: 26px; font-size: 15px; }
+.hora-celda .nc { font-size: 22px; font-weight: 600; line-height: 1.2; }
+.hora-celda .r, .hora-celda .w { font-size: 11px; color: var(--tinta-2); white-space: nowrap; }
+.hora-celda.mal .w { color: var(--rojo); font-weight: 600; }
+.resumen-horario { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.leyenda-semaforo { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 0; color: var(--tinta-2); font-size: 12px; }
+.leyenda-semaforo span::before { content: ""; display: inline-block; width: 10px; height: 10px; margin-right: 6px; border-radius: 2px; vertical-align: -1px; }
+.leyenda-semaforo .ok::before { background: var(--verde); }
+.leyenda-semaforo .medio::before { background: var(--seguridad); }
+.leyenda-semaforo .mal::before { background: var(--rojo); }
+
+/* Formulación del MILP */
+.formulacion { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: var(--espacio); margin-bottom: 16px; }
+.formulacion .sub { margin-top: 0; }
+.turnos-lista { margin: 0; padding: 0; list-style: none; }
+.turnos-lista li { display: grid; grid-template-columns: 34px minmax(0, 1fr) 28px; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--linea); font-size: 13px; }
+.turnos-lista .var { font-weight: 600; }
+.turnos-lista strong { font-size: 17px; text-align: right; }
+.f-bloque { margin: 0 0 8px; padding: 9px 12px; border-radius: 8px; background: var(--panel); font-size: 14px; }
+.f-bloque.alt { border-left: 3px solid var(--verde); }
+
+/* Pestañas de métricas */
+.pestanas { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 12px; border-bottom: 1px solid var(--linea); }
+.pestanas button {
+  padding: 8px 14px; border: 0; border-bottom: 2px solid transparent; background: none; color: var(--tinta-2);
+  font-weight: 500; cursor: pointer; transition: color 150ms var(--curva), border-color 150ms var(--curva);
+}
+.pestanas button:hover { color: var(--tinta); }
+.pestanas button[aria-selected="true"] { border-bottom-color: var(--tinta); color: var(--tinta); font-weight: 600; }
+.segmentado[hidden] { display: none; }
+
+/* ROI y causas de la venta perdida */
+#vRoi.negativo { color: var(--rojo); }
+.causas { display: grid; gap: 8px; }
+.causa { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1.4fr) 150px; align-items: center; gap: 12px; font-size: 13px; }
+.causa small { color: var(--tinta-2); }
+.c-barra { height: 14px; border-radius: 4px; background: var(--panel); }
+.c-barra i { display: block; height: 100%; border-radius: 4px; background: var(--serie-actual); animation: crecer 800ms var(--curva) both; transform-origin: left; }
+.causa.espera { color: var(--rojo); font-weight: 600; }
+.causa.espera .c-barra i { background: var(--rojo); }
+.c-v { text-align: right; font-weight: 500; white-space: nowrap; }
+
+@media (max-width: 860px) {
+  .formulas, .evidencia { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .demo { padding: 10px; }
+  .demo-cuerpo, .formulacion { grid-template-columns: minmax(0, 1fr); }
+  .horario { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  .resumen-horario { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .causa { grid-template-columns: minmax(0, 1fr) 110px; }
+  .causa .c-barra { grid-column: 1 / -1; grid-row: 2; }
+  .evidencia dt { font-size: 22px; }
+  .datos-hora { gap: 18px; flex-wrap: wrap; }
+}
+/* Tablas anchas (teoría vs datos, métricas): en el teléfono se desplazan dentro de su caja, no la página */
+.tabla-ancha { max-width: 100%; overflow-x: auto; }
+@media (max-width: 860px) { .detalle .resultados th, .detalle .resultados td { padding: 8px 6px; font-size: 12px; } }
+.portada + .bloque { margin-top: 48px; }
+/* En el teléfono, los controles segmentados con muchas opciones bajan a una segunda fila */
+.segmentado { flex-wrap: wrap; max-width: 100%; }
+@media (max-width: 860px) { .segmentado { border-radius: 18px; } .segmentado button { padding: 7px 12px; } }

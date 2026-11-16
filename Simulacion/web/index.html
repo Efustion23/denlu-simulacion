@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Andén DENLU</title>
-  <meta name="description" content="Optimización de personal en el almacén de DENLU (Tarma): diagnóstico con colas, plan MILP, cobertura y ROI, con una animación de un día de despacho.">
+  <meta name="description" content="Optimización de personal en el almacén de DENLU (Tarma): demostración de la cola, diagnóstico M/M/c, despachadores por hora, plan MILP, métricas, ROI y una animación de un día de despacho.">
   <script>document.documentElement.classList.add("js"); try { var t = localStorage.getItem('denlu-tema'); if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; } catch (e) {}</script>
   <link rel="stylesheet" href="estilos.css">
 </head>
@@ -19,10 +19,13 @@
       <span><span class="marca-nombre">DENLU</span><span class="marca-ambito">Almacén de Tarma</span></span>
     </a>
     <nav class="pasos" aria-label="Secciones">
-      <a href="#diagnostico"><span class="num">1</span><span class="txt">Diagnóstico</span></a>
-      <a href="#plan"><span class="num">2</span><span class="txt">Plan</span></a>
-      <a href="#roi"><span class="num">3</span><span class="txt">ROI</span></a>
-      <a href="#dia"><span class="num">4</span><span class="txt">Un día</span></a>
+      <a href="#cola"><span class="num">1</span><span class="txt">La cola</span></a>
+      <a href="#diagnostico"><span class="num">2</span><span class="txt">Diagnóstico</span></a>
+      <a href="#porhora"><span class="num">3</span><span class="txt">Por hora</span></a>
+      <a href="#plan"><span class="num">4</span><span class="txt">Plan</span></a>
+      <a href="#metricas"><span class="num">5</span><span class="txt">Métricas</span></a>
+      <a href="#roi"><span class="num">6</span><span class="txt">ROI</span></a>
+      <a href="#dia"><span class="num">7</span><span class="txt">Un día</span></a>
     </nav>
     <button type="button" class="tema" id="tema" aria-pressed="false" aria-label="Tema oscuro" title="Cambiar entre tema claro y oscuro">
           <svg class="luna" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
@@ -32,19 +35,82 @@
 
   <main class="hoja" id="inicio">
     <section class="portada revelar" aria-labelledby="tTitulo">
-      <p class="antetitulo">Investigación de Operaciones 1 · Teoría de colas y programación entera</p>
+      <p class="antetitulo">Investigación de Operaciones 1 · Teoría de colas M/M/c y programación entera (MILP)</p>
       <h1 id="tTitulo">¿Cuántos despachadores necesita el almacén de DENLU, y en qué horario?</h1>
-      <p class="hallazgo">Con 3 despachadores fijos, a las 9 y 10 h llegan más pedidos de los que se pueden atender: tres de cada cuatro pierden su ruta. Un plan de turnos optimizado cubre esas horas por <strong>S/ 6,867.52</strong> al mes y se paga muchas veces con las ventas que recupera.</p>
-      <dl class="kpis" id="kpis" aria-label="Resultados principales de Denlu.ipynb"></dl>
-      <p class="fuente">Todas las cifras salen del notebook <a href="https://github.com/Efustion23/denlu-simulacion/blob/main/Simulacion/Denlu.ipynb">Denlu.ipynb</a>.</p>
+      <p class="hallazgo">Con 3 despachadores fijos, los pedidos de las 9 a las 11 h y de las 15 h llegan casi tan rápido como se pueden preparar: <strong>se forma una cola</strong> y el 41 % de los pedidos del año tuvo que esperar. Un plan de turnos optimizado por programación entera reparte al personal según la demanda de cada hora.</p>
+      <dl class="kpis" id="kpis" aria-label="Resultados principales"></dl>
+      <p class="fuente">Cifras del notebook <a href="https://github.com/Efustion23/denlu-simulacion/blob/main/Simulacion/Denlu.ipynb">Denlu.ipynb</a> y de su base de datos de 2025 (8 012 pedidos, 299 días).</p>
+    </section>
+
+    <section class="bloque paso-seccion revelar" id="cola" aria-labelledby="tCola">
+      <div class="bloque-cab">
+        <h2 id="tCola"><span class="num">1</span>Demostración: así se forma la cola</h2>
+        <span class="estado">M/M/3 · μ = 1.348 pedidos/h por despachador</span>
+      </div>
+      <p class="nota-bloque">Una cola se forma cuando los pedidos llegan más rápido de lo que los despachadores alcanzan a prepararlos <em>en ese momento</em>. Las llegadas siguen un proceso de Poisson (λ pedidos por hora) y cada pedido toma en promedio 44.5 min (exponencial). Aunque en promedio alcance (ρ &lt; 1), por el azar hay ratos en que llegan varios juntos y todos los despachadores están ocupados: ahí empieza la espera. Cuanto más cerca de 1 está ρ, más larga se vuelve.</p>
+
+      <div class="formulas" aria-label="Fórmulas del modelo M/M/c">
+        <div><span class="f-et">Utilización</span><span class="f">ρ = λ / (c · μ)</span></div>
+        <div><span class="f-et">Probabilidad de esperar (Erlang C)</span><span class="f">P<sub>w</sub> = [ (λ/μ)<sup>c</sup> / (c! (1−ρ)) ] · P<sub>0</sub></span></div>
+        <div><span class="f-et">Pedidos en cola</span><span class="f">L<sub>q</sub> = P<sub>0</sub> (λ/μ)<sup>c</sup> ρ / (c! (1−ρ)<sup>2</sup>)</span></div>
+        <div><span class="f-et">Espera en cola</span><span class="f">W<sub>q</sub> = L<sub>q</sub> / λ</span></div>
+      </div>
+
+      <h3 class="sub">Pruébalo: elige una hora y cuántos despachadores atienden</h3>
+      <div class="demo">
+        <div class="demo-controles">
+          <div class="horas horas-chicas" id="demoHoras" role="group" aria-label="Hora a simular"></div>
+          <div class="stepper" aria-label="Despachadores">
+            <span>Despachadores</span>
+            <button type="button" id="demoMenos" aria-label="Uno menos">−</button>
+            <strong id="demoC">3</strong>
+            <button type="button" id="demoMas" aria-label="Uno más">+</button>
+          </div>
+          <button type="button" class="primario-chico" id="demoPlay">Pausar</button>
+          <button type="button" class="enlace" id="demoReiniciar">Reiniciar</button>
+        </div>
+        <div class="demo-cuerpo">
+          <div class="demo-lienzo"><canvas id="demoLienzo" role="img" aria-label="Simulación de la cola de la hora elegida: pedidos que llegan, esperan y son atendidos"></canvas></div>
+          <div class="demo-teoria">
+            <p class="demo-hora" id="demoTitulo"></p>
+            <dl class="mini-kpis">
+              <div><dt>ρ</dt><dd id="tRho"></dd></div>
+              <div><dt>P(esperar)</dt><dd id="tPw"></dd></div>
+              <div><dt>L<sub>q</sub> teórico</dt><dd id="tLq"></dd></div>
+              <div><dt>W<sub>q</sub> teórico</dt><dd id="tWq"></dd></div>
+            </dl>
+            <p class="demo-veredicto" id="demoVeredicto" aria-live="polite"></p>
+            <dl class="mini-kpis vivo">
+              <div><dt>En cola ahora</dt><dd id="sCola">0</dd></div>
+              <div><dt>Esperaron</dt><dd id="sEsperaron">0 %</dd></div>
+              <div><dt>Espera media</dt><dd id="sEspera">–</dd></div>
+              <div><dt>Cola máxima</dt><dd id="sMax">0</dd></div>
+            </dl>
+          </div>
+        </div>
+        <p class="pie-demo">Simulación en vivo con las tasas reales de esa hora (1 s = 4 min). La teoría da el valor de largo plazo; en el almacén cada hora dura 60 min, por eso la cola real crece de a poco durante las horas pico.</p>
+      </div>
+
+      <h3 class="sub">La evidencia: la cola en los datos de 2025</h3>
+      <dl class="evidencia" id="evidencia"></dl>
+      <div class="segmentado" id="vistaCola" role="group" aria-label="Día a mostrar">
+        <button type="button" data-cola="prom" aria-pressed="true">Día promedio</button>
+        <button type="button" data-cola="peor">Peor día del año</button>
+      </div>
+      <div class="grafico grafico-medio"><canvas id="gColaReal" aria-label="Pedidos en cola a lo largo del día según el CSV"></canvas></div>
+      <div class="grafico grafico-medio"><canvas id="gEsperan" aria-label="Porcentaje de pedidos que esperaron por hora"></canvas></div>
+      <details class="detalle">
+        <summary>Ver la tabla: teoría M/M/3 frente a lo observado</summary>
+        <div class="tabla-ancha"><table class="resultados" id="tablaCola"></table></div>
+      </details>
     </section>
 
     <section class="bloque paso-seccion revelar" id="diagnostico" aria-labelledby="tDiag">
       <div class="bloque-cab">
-        <h2 id="tDiag"><span class="num">1</span>Diagnóstico: ¿dónde se satura el almacén?</h2>
+        <h2 id="tDiag"><span class="num">2</span>Diagnóstico: ¿dónde se satura el almacén?</h2>
         <span class="estado">3 despachadores · 8 012 pedidos · 299 días</span>
       </div>
-      <p class="nota-bloque">Cada despachador prepara un pedido en 44.5 min en promedio, así que los 3 juntos atienden unos <strong>4.0 pedidos por hora</strong>. Elige una hora para comparar lo que llega con lo que se puede atender.</p>
+      <p class="nota-bloque">Los 3 despachadores juntos atienden unos <strong>4.0 pedidos por hora</strong> (3 × 60 / 44.5). Elige una hora para comparar lo que llega con lo que se puede atender. El límite recomendado es ρ = 0.85.</p>
       <div class="horas" id="horas" role="tablist" aria-label="Hora del día"></div>
       <div class="explorador">
         <div class="balanza">
@@ -54,6 +120,7 @@
           <div class="datos-hora">
             <div><span>Espera media</span><strong id="vEspera"></strong></div>
             <div><span>Pierden su ruta</span><strong id="vPerdida"></strong></div>
+            <div><span>Esperaron</span><strong id="vEsperaron"></strong></div>
           </div>
           <button type="button" class="enlace" id="recorrer">▶ Recorrer el día hora por hora</button>
         </div>
@@ -65,55 +132,110 @@
             <line class="aguja" id="aguja" x1="100" y1="100" x2="100" y2="30" />
             <circle cx="100" cy="100" r="5" class="eje" />
           </svg>
-          <figcaption><span class="rho-valor" id="vRho"></span><span class="rho-et">utilización ρ · objetivo 0.85 · desde 1 la cola crece sin límite</span></figcaption>
+          <figcaption><span class="rho-valor" id="vRho"></span><span class="rho-et">utilización ρ · la marca es el límite 0.85 · en 1 la cola crece sin límite</span></figcaption>
         </figure>
       </div>
       <div class="grafico grafico-medio"><canvas id="gRho" aria-label="Utilización por hora con 3 despachadores"></canvas></div>
       <details class="detalle">
         <summary>Ver la tabla completa del diagnóstico</summary>
-        <table class="resultados" id="tablaDiag"></table>
+        <div class="tabla-ancha"><table class="resultados" id="tablaDiag"></table></div>
       </details>
+    </section>
+
+    <section class="bloque paso-seccion revelar" id="porhora" aria-labelledby="tPorHora">
+      <div class="bloque-cab">
+        <h2 id="tPorHora"><span class="num">3</span>Despachadores por hora</h2>
+        <span class="estado">hoy, requerido, plan MILP y plan con espera ≤ 15 min</span>
+      </div>
+      <p class="nota-bloque">Hoy trabajan 3 despachadores de 8 a 18 h todo el año, salvo diciembre: según el CSV, en sus 24 días hubo 4. El requerido D<sub>h</sub> es el mínimo para que ρ ≤ 0.85. El plan MILP lo cumple al menor costo, pero a las 8, 12 y 17 h deja 2 despachadores y la espera teórica sube a 34–43 min. Por eso agregamos un plan alternativo que además pide W<sub>q</sub> ≤ 15 min en cada hora.</p>
+      <div class="grafico grafico-medio"><canvas id="gPorHora" aria-label="Despachadores por hora en cada escenario"></canvas></div>
+      <h3 class="sub">Simulador: arma tu propio horario</h3>
+      <p class="nota-bloque">Parte de un escenario y cambia cuántos despachadores hay en cada hora. Cada casilla muestra al instante la utilización y la espera teórica de esa hora.</p>
+      <div class="segmentado" id="escenarios" role="group" aria-label="Escenario de partida"></div>
+      <div class="horario" id="horario" aria-label="Despachadores por hora"></div>
+      <dl class="mini-kpis resumen-horario" id="resumenHorario"></dl>
+      <p class="leyenda-semaforo"><span class="ok">W<sub>q</sub> ≤ 15 min</span><span class="medio">15 a 30 min</span><span class="mal">más de 30 min o ρ ≥ 1</span></p>
     </section>
 
     <section class="bloque paso-seccion revelar" id="plan" aria-labelledby="tMilp">
       <div class="bloque-cab">
-        <h2 id="tMilp"><span class="num">2</span>Plan: turnos que cubren cada hora</h2>
-        <span class="estado">ρ ≤ 0.85 · part-time ≤ 40 % (D.S. 003-97-TR)</span>
+        <h2 id="tMilp"><span class="num">4</span>Plan: turnos que cubren cada hora</h2>
+        <span class="estado">OR-Tools (SCIP) · part-time ≤ 40 % (D.S. 003-97-TR)</span>
       </div>
-      <p class="nota-bloque">Para que ninguna hora pase de ρ = 0.85 se necesitan D<sub>h</sub> = máx(1, ⌈λ<sub>h</sub> / (0.85 μ)⌉) despachadores. El modelo de programación entera elige cuántas personas entran en cada turno al menor costo de planilla. Compara el horario de hoy con el del plan.</p>
+      <div class="formulacion">
+        <div>
+          <h3 class="sub">Variables (personas por turno)</h3>
+          <ul class="turnos-lista" id="turnosLista"></ul>
+        </div>
+        <div>
+          <h3 class="sub">Modelo</h3>
+          <p class="f-bloque"><strong>Min Z</strong> = 1 373.50 (X<sub>1</sub> + X<sub>2</sub> + X<sub>3</sub>) + 686.76 (Y<sub>1</sub> + Y<sub>2</sub> + Y<sub>3</sub>)</p>
+          <p class="f-bloque">Capacidad<sub>h</sub> ≥ D<sub>h</sub> = máx(1, ⌈λ<sub>h</sub> / (0.85 μ)⌉) en cada hora h = 8 … 17</p>
+          <p class="f-bloque">−0.40 ΣX<sub>j</sub> + 0.60 ΣY<sub>k</sub> ≤ 0 &nbsp;(part-time ≤ 40 % del total)</p>
+          <p class="f-bloque alt">Plan alternativo: además W<sub>q,h</sub> ≤ 15 min en cada hora</p>
+        </div>
+      </div>
       <div class="segmentado" id="vistaGantt" role="group" aria-label="Horario a mostrar">
         <button type="button" data-vista="actual">Hoy: 3 fijos</button>
         <button type="button" data-vista="milp" aria-pressed="true">Plan MILP</button>
+        <button type="button" data-vista="alternativo">Plan espera ≤ 15 min</button>
       </div>
       <div class="gantt" id="gantt" aria-label="Horario por persona y cobertura por hora"></div>
       <p class="plan-milp" id="planMilp"></p>
       <div class="grafico grafico-medio"><canvas id="gCobertura" aria-label="Despachadores requeridos y asignados por hora"></canvas></div>
       <details class="detalle">
         <summary>Ver la tabla de cobertura</summary>
-        <table class="resultados" id="tablaCobertura"></table>
+        <div class="tabla-ancha"><table class="resultados" id="tablaCobertura"></table></div>
+      </details>
+    </section>
+
+    <section class="bloque paso-seccion revelar" id="metricas" aria-labelledby="tMetricas">
+      <div class="bloque-cab">
+        <h2 id="tMetricas"><span class="num">5</span>Métricas de colas del plan</h2>
+        <span class="estado">L, W, L<sub>q</sub>, W<sub>q</sub> · llegadas · bondad de ajuste · utilización</span>
+      </div>
+      <div class="pestanas" id="pestanas" role="tablist" aria-label="Métrica">
+        <button type="button" role="tab" data-p="lw" aria-selected="true">L, W, L<sub>q</sub>, W<sub>q</sub></button>
+        <button type="button" role="tab" data-p="llegadas">Tiempo entre llegadas</button>
+        <button type="button" role="tab" data-p="ajuste">Bondad de ajuste</button>
+        <button type="button" role="tab" data-p="util">Utilización vs 80 %</button>
+      </div>
+      <div class="segmentado" id="planMetricas" role="group" aria-label="Plan a evaluar"></div>
+      <p class="nota-bloque" id="notaMetrica"></p>
+      <div class="grafico grafico-medio"><canvas id="gMetrica" aria-label="Gráfico de la métrica elegida"></canvas></div>
+      <details class="detalle" open>
+        <summary>Ver la tabla</summary>
+        <div class="tabla-ancha"><table class="resultados" id="tablaMetrica"></table></div>
       </details>
     </section>
 
     <section class="bloque paso-seccion revelar" id="roi" aria-labelledby="tRoi">
       <div class="bloque-cab">
-        <h2 id="tRoi"><span class="num">3</span>¿Vale la pena? Retorno de la inversión</h2>
-        <span class="estado">supuesto: el plan recupera el 95 % de la venta perdida</span>
+        <h2 id="tRoi"><span class="num">6</span>¿Vale la pena? Retorno de la inversión</h2>
+        <span class="estado">plan MILP frente a 3 fijos</span>
       </div>
-      <p class="nota-bloque">Hoy se pierden <strong>S/ 620,042.58</strong> al año por pedidos cancelados. Si el plan recupera el 95 % de esas ventas y cuesta S/ 32,964.24 más de planilla, queda este beneficio:</p>
+      <div class="segmentado" id="vistaRoi" role="group" aria-label="Supuesto del ROI">
+        <button type="button" data-roi="notebook" aria-pressed="true">Supuesto del notebook</button>
+        <button type="button" data-roi="conservador">Solo la venta ligada a la espera</button>
+      </div>
+      <p class="nota-bloque" id="notaRoi"></p>
       <div class="cascada" id="cascada" aria-label="De la venta perdida al beneficio neto"></div>
+      <div class="cascada-et" id="cascadaEt"></div>
       <p class="roi-final">Retorno de la inversión: <strong id="vRoi">0 %</strong></p>
+      <h3 class="sub">¿De dónde viene la venta perdida? (CSV 2025)</h3>
+      <div class="causas" id="causas"></div>
       <details class="detalle">
         <summary>Ver el cálculo completo</summary>
-        <table class="resultados resultados-roi" id="tablaRoi"></table>
+        <div class="tabla-ancha"><table class="resultados resultados-roi" id="tablaRoi"></table></div>
       </details>
     </section>
 
       <section class="bloque paso-seccion revelar" id="dia" aria-labelledby="tDia">
         <div class="bloque-cab">
-          <h2 id="tDia"><span class="num">4</span>Un día en el almacén</h2>
+          <h2 id="tDia"><span class="num">7</span>Un día en el almacén</h2>
           <span class="estado" id="estadoDia" aria-live="polite"></span>
         </div>
-        <p class="nota-bloque">El almacén en 3D (o en plano 2D). Los pedidos llegan por teléfono y vendedores, se imprimen y esperan en el tablero. Cada despachador toma una hoja y la lleva a la <strong>zona de acopio</strong>, donde el encargado hace la lista de productos del pedido; con esa lista recoge la mercadería en los estantes, la junta en su palé del acopio y la revisa contra la lista, la empaca en su mesa y la lleva al camión de su ruta. En el almuerzo o fuera de turno está en el comedor. Es una ilustración que no forma parte de <code>Denlu.ipynb</code>: un día simulado pedido por pedido con las tasas λ por hora del diagnóstico y μ = 44.5 min. Supone que un pedido que espera más de 20 min pierde su ruta y, a veces, el cliente cancela, y que en el acopio hacer la lista y revisar los productos toman cerca del 15 % del tiempo de despacho cada uno (unos 6.7 de los 44.5 min): son parte de ese tiempo, así que las cifras no cambian.</p>
+        <p class="nota-bloque">El almacén en 3D (o en plano 2D). Los pedidos llegan por teléfono y vendedores, se imprimen y esperan en el tablero. Cada despachador toma una hoja y la lleva a la <strong>zona de acopio</strong>, donde el encargado hace la lista de productos del pedido; con esa lista recoge la mercadería en los estantes, la junta en su palé del acopio y la revisa contra la lista, la empaca en su mesa y la lleva al camión de su ruta. En el almuerzo o fuera de turno está en el comedor. Es una ilustración que no forma parte de <code>Denlu.ipynb</code>: un día simulado pedido por pedido con las tasas λ por hora del diagnóstico y μ = 44.5 min. Supone, como en los datos de 2025, que el 5.82 % de los pedidos llega sin stock y se cancela en ventas, que un pedido que espera más de 72 min pierde su ruta (así se repite el 5.3 % de rutas perdidas del CSV) y que en el acopio hacer la lista y revisar los productos toman cerca del 15 % del tiempo de despacho cada uno (unos 6.7 de los 44.5 min): son parte de ese tiempo, así que las cifras no cambian.</p>
         <div class="selector-plan">
           <div class="segmentado" id="presets" role="group" aria-label="Quién atiende el día"></div>
           <p class="costo"><span id="costoMes"></span> al mes <span class="costo-gente" id="totalPersonas"></span></p>
@@ -138,7 +260,7 @@
         <ul class="leyenda" aria-label="Qué significa cada cosa">
           <li><span class="sw sw-hoja"></span><span>Pedido en el tablero (la barra amarilla es su espera)</span></li>
           <li><span class="sw sw-hoja sw-perdio"></span><span>Esperó más de <strong id="leyendaT">20</strong> min y perdió su camión</span></li>
-          <li><span class="sw sw-hoja sw-cancelo"></span><span>El cliente canceló</span></li>
+          <li><span class="sw sw-hoja sw-cancelo"></span><span>Cancelado: llegó sin stock</span></li>
           <li><span class="sw sw-desp"></span><span>Despachador (D1, D2…) con chaleco</span></li>
           <li><span class="sw sw-acopio"></span><span>Zona de acopio: el encargado hace la lista y ahí se juntan y revisan los productos</span></li>
           <li><span class="sw sw-caja"></span><span>Caja del pedido: se recoge, se empaca y va al camión</span></li>
@@ -176,6 +298,7 @@
   <script src="vendor/OrbitControls.js"></script>
   <script src="simulacion.js"></script>
   <script src="app.js"></script>
+  <script src="cola.js"></script>
   <script src="almacen3d.js"></script>
 </body>
 </html>
