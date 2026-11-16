@@ -541,6 +541,8 @@ const Vista3D = (() => {
       const g = crearPersona({ ropa: '#ec7a1c', piel: PIEL[k % PIEL.length], pelo: PELO[k % PELO.length], chaleco: true });
       const et = spriteTexto(`D${k + 1}`, { fondo: '#2d5c88', tam: 36 }, 0.3);
       et.position.y = 2.05; g.add(et); g.userData.etiqueta = et;
+      const zz = spriteTexto('z z', { fondo: null, color: '#6b7075', tam: 40, peso: 700 }, 0.32);   // ocio: pagado sin pedidos
+      zz.position.set(0.25, 2.35, 0); zz.visible = false; g.add(zz); g.userData.zz = zz;
       escena.add(g); personas3.push(g);
     }
     let r = 0;
@@ -558,6 +560,8 @@ const Vista3D = (() => {
       posar(g, { camina: per.camina, paso: per.paso, carga: per.carga, colores, accion, sentado, come: sentado, t: sentado ? dia.t * 0.7 + k : dia.t * 1.4 });
       ponerTexto(g.userData.etiqueta, `D${k + 1}`, { fondo: per.activo || tr ? '#2d5c88' : '#5b5f5c', tam: 36 });
       g.userData.etiqueta.visible = !sentado;
+      g.userData.zz.visible = ocioso(per);
+      if (g.userData.zz.visible) g.userData.zz.position.y = 2.35 + (reducirMovimiento ? 0 : 0.06 * Math.sin(performance.now() / 500 + k));
       // Productos que saltan del estante (a la altura de las repisas) a los brazos
       if (accion === 'recoger') {
         const f = Math.min(1, (dia.t - tramo.t0) / Math.max(1e-6, tramo.t1 - tramo.t0)), a = per.angVis;

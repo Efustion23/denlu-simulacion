@@ -27,6 +27,12 @@ const TURNOS = {
   'PT-2': { horario: '10–14', horas: [10, 11, 12, 13], parcial: true },
   'PT-3': { horario: '14–18', horas: [14, 15, 16, 17], parcial: true },
   'Fijo': { horario: '08–18 sin almuerzo (situación actual)', horas: HORAS },
+  // Sección 6 del notebook: jornada de 10 h como la de hoy (2 h extra) y personal por horas (mismo costo por hora que el medio tiempo)
+  'FT 10 h': { horario: '08–18, 2 h extra diarias', horas: HORAS, costo: 1663.48 },
+  'H 09-12': { horario: 'por horas 09–12', horas: [9, 10, 11], parcial: true, porHoras: true, costo: 3 * C_PT / 4 },
+  'H 11-13': { horario: 'por horas 11–13', horas: [11, 12], parcial: true, porHoras: true, costo: 2 * C_PT / 4 },
+  'H 14-16': { horario: 'por horas 14–16', horas: [14, 15], parcial: true, porHoras: true, costo: 2 * C_PT / 4 },
+  'H 15-18': { horario: 'por horas 15–18', horas: [15, 16, 17], parcial: true, porHoras: true, costo: 3 * C_PT / 4 },
 };
 
 const WQ_MAX = 15;                         // plan alternativo: espera media en cola de a lo más 15 min en cada hora
@@ -35,6 +41,8 @@ const PLANES = {
   milp: { nombre: 'Plan MILP', plan: { 'FT-1': 2, 'FT-3': 1, 'PT-1': 1, 'PT-3': 1 } },   // solución de la celda 7 (SCIP)
   // Propuesta adicional (no está en el notebook): el mismo MILP con la condición extra Wq ≤ 15 min en cada hora
   alternativo: { nombre: `Plan con espera ≤ ${WQ_MAX} min`, plan: { 'FT-1': 2, 'FT-2': 1, 'FT-3': 2, 'PT-3': 1 } },
+  // Sección 6 del notebook: el más barato con ρ < 1 que no empeora el servicio de hoy (MILP + simulación, sin tope de part-time)
+  recomendado: { nombre: 'Plan recomendado (ρ < 1)', plan: { 'FT 10 h': 1, 'FT-1': 1, 'H 09-12': 1, 'H 11-13': 1, 'H 14-16': 1, 'H 15-18': 1 } },
 };
 
 // Salidas de Denlu.ipynb que no dependen del modelo de simulación
@@ -77,6 +85,21 @@ const CSV = {
   ],
 };
 
+// Sección 6 de Denlu.ipynb: optimización realista (MILP + simulación de 5 años por plan). costoHoyReal suma las 2 h extra
+// diarias de hoy; totalHoy y total de cada plan suman además las horas extra después de las 18:00 que da la simulación.
+const OPTIMIZACION = {"costoHoyBase": 4120.5, "costoExtraHoy": 869.94, "costoHoyReal": 4990.44, "totalHoy": 5208.46, "totalMilp": 5693.91, "costo10h": 1663.48, "equilibrioPct": 13.6, "horasPorHoras": 10, "minimosRho1": [2, 3, 3, 3, 2, 2, 3, 3, 2, 2], "hoy": {"espera": 14.03, "perdida": 5.67, "ocio_h": 12.81, "utilizacion": 57.31, "extra_h_mes": 37.47}, "milp": {"espera": 8.4, "perdida": 2.78, "ocio_h": 14.53, "utilizacion": 54.6, "extra_h_mes": 34.35}, "filas": [
+    {"modalidad": "Jornada de 10 h (como hoy) + medio tiempo + por horas", "tope": false, "conPT": true, "plan": {"FT 10 h (08-18, 2 h extra)": 1, "FT-1 (08-17, alm. 12-13)": 1, "Por horas 11-13": 1, "Por horas 14-16": 1, "Por horas 09-12": 1, "Por horas 15-18": 1}, "personas": 6, "cobertura": [2, 3, 3, 4, 2, 2, 3, 4, 3, 2], "planilla": 4753.88, "extra": 221.55, "total": 4975.43, "ahorro": 233.02, "espera": 13.92, "perdida": 5.59, "utilizacion": 61.0, "ocio": 10.9},
+    {"modalidad": "Full-time + medio tiempo + por horas", "tope": false, "conPT": true, "plan": {"FT-1 (08-17, alm. 12-13)": 1, "FT-3 (09-18, alm. 14-15)": 1, "PT 08-12": 1, "PT 14-18": 1, "Por horas 11-13": 1, "Por horas 14-16": 1}, "personas": 6, "cobertura": [2, 3, 3, 4, 2, 2, 3, 4, 3, 2], "planilla": 4807.28, "extra": 221.55, "total": 5028.83, "ahorro": 179.63, "espera": 13.92, "perdida": 5.59, "utilizacion": 61.0, "ocio": 10.9},
+    {"modalidad": "Jornada de 10 h (como hoy) + medio tiempo + por horas", "tope": true, "conPT": true, "plan": {"FT 10 h (08-18, 2 h extra)": 1, "FT-1 (08-17, alm. 12-13)": 1, "FT-3 (09-18, alm. 14-15)": 1, "Por horas 09-11": 1, "Por horas 14-16": 1}, "personas": 5, "cobertura": [2, 4, 4, 3, 2, 3, 3, 4, 3, 2], "planilla": 5097.24, "extra": 225.9, "total": 5323.14, "ahorro": -114.69, "espera": 12.3, "perdida": 5.18, "utilizacion": 57.2, "ocio": 12.8},
+    {"modalidad": "Full-time + medio tiempo + por horas", "tope": true, "conPT": true, "plan": {"FT-1 (08-17, alm. 12-13)": 1, "FT-2 (08-17, alm. 13-14)": 1, "FT-3 (09-18, alm. 14-15)": 1, "PT 14-18": 1, "Por horas 10-12": 1}, "personas": 5, "cobertura": [2, 3, 4, 4, 2, 2, 3, 4, 4, 2], "planilla": 5150.64, "extra": 207.27, "total": 5357.91, "ahorro": -149.46, "espera": 10.88, "perdida": 4.28, "utilizacion": 57.8, "ocio": 12.6},
+    {"modalidad": "Jornada de 10 h (como hoy) + medio tiempo", "tope": true, "conPT": true, "plan": {"FT 10 h (08-18, 2 h extra)": 2, "FT-2 (08-17, alm. 13-14)": 1, "PT 08-12": 1}, "personas": 4, "cobertura": [4, 4, 4, 4, 3, 2, 3, 3, 3, 2], "planilla": 5387.22, "extra": 245.85, "total": 5633.07, "ahorro": -424.61, "espera": 12.01, "perdida": 5.02, "utilizacion": 53.2, "ocio": 15.0},
+    {"modalidad": "Full-time + medio tiempo a cualquier hora", "tope": true, "conPT": true, "plan": {"FT-1 (08-17, alm. 12-13)": 1, "FT-2 (08-17, alm. 13-14)": 1, "FT-3 (09-18, alm. 14-15)": 1, "PT 08-12": 1, "PT 14-18": 1}, "personas": 5, "cobertura": [3, 4, 4, 4, 2, 2, 3, 4, 4, 2], "planilla": 5494.02, "extra": 198.35, "total": 5692.37, "ahorro": -483.91, "espera": 9.89, "perdida": 3.78, "utilizacion": 54.0, "ocio": 14.7},
+    {"modalidad": "Full-time + medio tiempo del notebook", "tope": false, "conPT": true, "plan": {"FT-1 (08-17, alm. 12-13)": 2, "FT-3 (09-18, alm. 14-15)": 1, "PT-1 (09-13)": 1, "PT-3 (14-18)": 1}, "personas": 5, "cobertura": [2, 4, 4, 4, 2, 3, 3, 4, 4, 2], "planilla": 5494.02, "extra": 199.89, "total": 5693.91, "ahorro": -485.45, "espera": 8.4, "perdida": 2.78, "utilizacion": 54.6, "ocio": 14.5},
+    {"modalidad": "Full-time + medio tiempo a cualquier hora", "tope": false, "conPT": true, "plan": {"FT-1 (08-17, alm. 12-13)": 2, "FT-3 (09-18, alm. 14-15)": 1, "PT 09-13": 1, "PT 14-18": 1}, "personas": 5, "cobertura": [2, 4, 4, 4, 2, 3, 3, 4, 4, 2], "planilla": 5494.02, "extra": 199.89, "total": 5693.91, "ahorro": -485.45, "espera": 8.4, "perdida": 2.78, "utilizacion": 54.6, "ocio": 14.5},
+    {"modalidad": "Full-time + medio tiempo del notebook", "tope": true, "conPT": true, "plan": {"FT-1 (08-17, alm. 12-13)": 2, "FT-3 (09-18, alm. 14-15)": 1, "PT-2 (10-14)": 1, "PT-3 (14-18)": 1}, "personas": 5, "cobertura": [2, 3, 4, 4, 2, 4, 3, 4, 4, 2], "planilla": 5494.02, "extra": 213.22, "total": 5707.24, "ahorro": -498.78, "espera": 8.51, "perdida": 2.68, "utilizacion": 55.0, "ocio": 14.4},
+    {"modalidad": "Jornada de 10 h (como hoy) + medio tiempo", "tope": false, "conPT": true, "plan": {"PT 08-12": 2, "PT 09-13": 2, "PT 12-16": 2, "PT 14-18": 2}, "personas": 8, "cobertura": [2, 4, 4, 4, 4, 2, 4, 4, 2, 2], "planilla": 5494.08, "extra": 248.72, "total": 5742.8, "ahorro": -534.34, "espera": 9.94, "perdida": 3.99, "utilizacion": 53.3, "ocio": 15.0},
+    {"modalidad": "Solo full-time", "tope": false, "conPT": false, "plan": {"FT-2 (08-17, alm. 13-14)": 3, "FT-3 (09-18, alm. 14-15)": 2}, "personas": 5, "cobertura": [3, 5, 5, 5, 5, 2, 3, 5, 5, 2], "planilla": 6867.5, "extra": 181.66, "total": 7049.16, "ahorro": -1840.7, "espera": 3.4, "perdida": 0.83, "utilizacion": 43.4, "ocio": 22.6}]};
+
 // M/M/c en régimen estacionario (celdas 13 y 17): λ y μ en pedidos/hora; tiempos en minutos
 function mmc(l, c, mu = MU_H) {
   if (c <= 0 || l >= c * mu) return { estable: false, rho: c > 0 ? l / (c * mu) : Infinity, L: Infinity, W: Infinity, Lq: Infinity, Wq: Infinity, Pw: 1 };
@@ -118,7 +141,7 @@ function poisson(rng, l) {
 }
 
 const costoMensual = (plan) =>
-  Object.entries(plan).reduce((s, [t, n]) => s + n * (TURNOS[t].parcial ? C_PT : C_FT), 0);
+  Object.entries(plan).reduce((s, [t, n]) => s + n * (TURNOS[t].costo ?? (TURNOS[t].parcial ? C_PT : C_FT)), 0);
 
 const personalPorHora = (plan) =>
   HORAS.map((h) => Object.entries(plan).reduce((s, [t, n]) => s + (TURNOS[t].horas.includes(h) ? n : 0), 0));
@@ -280,7 +303,7 @@ function evaluar(plan, escenario = {}) {
 
 const Simulacion = {
   MU_MIN, MU_H, DIAS, HORAS, LAMBDA, HIST_ESPERA, HIST_PERDIDA, TICKET, C_FT, C_PT, COSTO_HORA_EXTRA, CIERRE, T_CAL, P_CAL, P_QUIEBRE, TURNOS, PLANES,
-  WQ_MAX, NOTEBOOK, CSV, VENTA_POR_ESPERA, mmc, roi, crearRng, costoMensual, personalPorHora, requeridos, requeridosConEspera, simularDia,
+  WQ_MAX, NOTEBOOK, CSV, OPTIMIZACION, VENTA_POR_ESPERA, mmc, roi, crearRng, costoMensual, personalPorHora, requeridos, requeridosConEspera, simularDia,
   presentesDelDia, simularAnio, evaluar,
 };
 if (typeof module !== 'undefined') module.exports = Simulacion;

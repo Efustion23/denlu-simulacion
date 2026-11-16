@@ -47,6 +47,18 @@ assert(cobAlt.every((c, i) => S.mmc(S.LAMBDA[i], c).Wq <= S.WQ_MAX));
 assert(parcial(alt) <= 0.4 * total(alt));
 assert(cerca(S.costoMensual(alt), 7554.26));
 
+// Sección 6 (optimización realista): el plan recomendado es el de la tabla del notebook, cumple ρ < 1 en cada hora,
+// su planilla es la del notebook y el costo real de hoy suma las 2 h extra diarias
+const O = S.OPTIMIZACION, rec = O.filas[0], planRec = S.PLANES.recomendado.plan;
+assert(cerca(S.costoMensual(planRec), rec.planilla, 0.01));
+assert.deepStrictEqual(S.personalPorHora(planRec), rec.cobertura);
+assert(S.personalPorHora(planRec).every((c, i) => S.LAMBDA[i] < c * S.MU_H), 'ρ < 1 en cada hora');
+assert.deepStrictEqual(O.minimosRho1, S.LAMBDA.map((l) => Math.floor(l / S.MU_H) + 1));
+assert(cerca(O.costoHoyReal, O.costoHoyBase + O.costoExtraHoy, 0.01) && cerca(O.costoHoyBase, S.costoMensual(S.PLANES.actual.plan), 0.01));
+assert(O.filas.every((f) => cerca(f.total, f.planilla + f.extra, 0.02) && cerca(f.ahorro, O.totalHoy - f.total, 0.02)));
+assert(O.filas.every((f, i) => !i || f.total >= O.filas[i - 1].total), 'tabla ordenada por costo');
+assert(rec.ahorro > 0 && rec.perdida <= O.hoy.perdida && rec.espera <= O.hoy.espera, 'el recomendado ahorra sin empeorar el servicio');
+
 // Causas de la venta perdida (CSV): suman la venta perdida del notebook; ROI conservador
 assert(cerca(S.CSV.causas.reduce((s, c) => s + c.monto, 0), N.ventaPerdida, 0.01));
 assert(cerca(S.roi(milp, S.VENTA_POR_ESPERA).roi, -45.67, 0.01));

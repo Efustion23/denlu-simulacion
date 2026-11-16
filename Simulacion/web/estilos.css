@@ -634,3 +634,25 @@ html { scroll-behavior: smooth; }
 /* En el teléfono, los controles segmentados con muchas opciones bajan a una segunda fila */
 .segmentado { flex-wrap: wrap; max-width: 100%; }
 @media (max-width: 860px) { .segmentado { border-radius: 18px; } .segmentado button { padding: 7px 12px; } }
+
+/* ---------- Optimización realista (sección 6 del notebook) ---------- */
+.gantt .celda.on.extra { background: repeating-linear-gradient(135deg, var(--acero) 0 5px, color-mix(in srgb, var(--acero) 55%, var(--hoja)) 5px 9px); }
+.gantt .celda.on.ph { background: color-mix(in srgb, var(--verde) 70%, var(--hoja)); }
+.grafico.grafico-alto { height: 380px; }
+.grafico.grafico-bajo { height: 190px; }
+.plan-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.chip { padding: 6px 12px; border: 1px solid var(--linea); border-radius: 999px; background: var(--panel); font-size: 13px; font-weight: 500; animation: aparecer 400ms var(--curva) both; }
+.chip.ph { border-color: color-mix(in srgb, var(--verde) 50%, transparent); background: color-mix(in srgb, var(--verde) 12%, transparent); }
+.chip.diez { border-color: color-mix(in srgb, var(--acero) 50%, transparent); background: color-mix(in srgb, var(--acero) 12%, transparent); }
+#verRecomendado { margin: 4px 0 8px; }
+.sensibilidad { padding: 14px 16px; border: 1px solid var(--linea); border-radius: 12px; }
+.sensibilidad label { display: block; margin-bottom: 8px; font-size: 14px; }
+.sensibilidad input[type="range"] { width: 100%; max-width: 520px; accent-color: var(--verde); }
+.sensibilidad .veredicto { min-height: 0; margin: 10px 0 0; font-size: 15px; color: var(--verde); }
+.sensibilidad .veredicto.mal { color: var(--rojo); }
+.resultados tr.mejor-fila td:first-child { font-weight: 600; color: var(--verde); }
+.resultados td.plan-celda { min-width: 260px; text-align: left; font-size: 12px; color: var(--tinta-2); }
+.sw-ocio { position: relative; border: 1px solid var(--control); border-radius: 50%; background: var(--panel); }
+.sw-ocio::after { content: "z"; position: absolute; inset: 0; display: grid; place-items: center; color: var(--tinta-2); font-size: 11px; font-weight: 700; }
+/* Con 8 pasos, en teléfonos angostos la barra superior deja solo los números */
+@media (max-width: 480px) { .barra .marca { display: none; } .pasos { gap: 0; } .pasos a { padding: 6px 5px; } }
