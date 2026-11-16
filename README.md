@@ -11,11 +11,11 @@ Trabajo de Investigación de Operaciones 1: optimización de personal en el alma
 
 | Ruta | Qué es |
 |---|---|
-| [`Simulacion/Denlu.ipynb`](Simulacion/Denlu.ipynb) | El notebook del trabajo, sin cambios: diagnóstico con colas M/M/c, requerimiento por hora, modelo MILP con OR-Tools, cobertura, ROI, métricas L, W, L<sub>q</sub>, W<sub>q</sub>, tiempo entre llegadas, bondad de ajuste y utilización frente al 80 %. |
-| [`Simulacion/web/`](Simulacion/web/) | Página guiada en siete pasos con las cifras del notebook (ver abajo). Funciona sin internet: Chart.js, Three.js r147 y la tipografía Barlow van incluidos en `vendor/` y `fonts/`. |
+| [`Simulacion/Denlu.ipynb`](Simulacion/Denlu.ipynb) | El notebook del trabajo: diagnóstico con colas M/M/c, requerimiento por hora, modelo MILP con OR-Tools, cobertura, ROI, métricas L, W, L<sub>q</sub>, W<sub>q</sub>, tiempo entre llegadas, bondad de ajuste y utilización frente al 80 %. La **sección 6** (nueva, al final) hace la optimización realista: costo real de hoy con horas extra, simulación de eventos discretos validada con el CSV, modalidades de contratación (full-time, jornada de 10 h, medio tiempo, por horas) y el plan más barato con ρ < 1 que no empeora el servicio. |
+| [`Simulacion/web/`](Simulacion/web/) | Página guiada en ocho pasos con las cifras del notebook (ver abajo). Funciona sin internet: Chart.js, Three.js r147 y la tipografía Barlow van incluidos en `vendor/` y `fonts/`. |
 | [`Simulacion/agregados_csv.py`](Simulacion/agregados_csv.py) | Calcula, a partir del CSV, los agregados que usa la página para demostrar la cola (no publica el CSV). |
 
-### Los siete pasos de la página
+### Los ocho pasos de la página
 
 1. **La cola.** Demostración de que se forma una cola:
    - Las fórmulas M/M/c.
@@ -26,9 +26,23 @@ Trabajo de Investigación de Operaciones 1: optimización de personal en el alma
    - Compara hoy (3; 4 en diciembre según el CSV), el requerido D<sub>h</sub>, el plan MILP y un plan alternativo.
    - Incluye un simulador para cambiar los despachadores de cada hora y ver ρ y W<sub>q</sub> al instante.
 4. **Plan.** La formulación del MILP, el horario por persona y la cobertura frente al mínimo.
-5. **Métricas.** L, W, L<sub>q</sub>, W<sub>q</sub>; el tiempo entre llegadas; la bondad de ajuste a Poisson; y la utilización frente al 80 %.
-6. **ROI.** El cálculo del notebook y, al lado, uno conservador, con las causas de la venta perdida.
-7. **Un día en el almacén.** Animación ilustrativa en 3D o en plano 2D, con la situación actual, el plan MILP o el plan alternativo.
+5. **Óptimo realista** (sección 6 del notebook):
+   - Compara el costo de cada modalidad de contratación con el costo real de hoy, con y sin el tope de 40 % de part-time.
+   - Muestra el plan recomendado y un control para ver si conviene contratar por horas según cuánto cueste esa hora.
+   - Mide el ocio pagado.
+6. **Métricas.** L, W, L<sub>q</sub>, W<sub>q</sub>; el tiempo entre llegadas; la bondad de ajuste a Poisson; y la utilización frente al 80 %.
+7. **ROI.** El cálculo del notebook y, al lado, uno conservador, con las causas de la venta perdida.
+8. **Un día en el almacén.** Animación ilustrativa en 3D o en plano 2D, con la situación actual, el plan MILP, el plan alternativo o el plan recomendado. Muestra con "zz" a los despachadores pagados sin pedidos y cuenta el costo de ese ocio.
+
+### Resultado de la optimización realista (sección 6)
+
+- **Hoy cuesta ≈ S/ 5,208 al mes.** Son S/ 4,120.50 de planilla, S/ 869.94 por las 2 h extra diarias y las horas extra después de las 18:00 cuando queda cola. De 30 horas pagadas al día, 12.8 se pagan sin pedidos.
+- **Plan recomendado:** 1 despachador con jornada de 10 h (como hoy), 1 FT-1 y personal por horas en los picos (09–12, 11–13, 14–16 y 15–18 h).
+  - Cuesta ≈ S/ 4,975 al mes: ahorra ≈ S/ 233 al mes (S/ 2,796 al año) frente a hoy, y ≈ S/ 718 al mes frente al plan MILP.
+  - Mantiene la espera y las rutas perdidas de hoy.
+  - Baja el ocio pagado a 10.9 h por día.
+- **Contratar por horas** conviene mientras esa hora no cueste más de ~14 % sobre la del medio tiempo.
+- **Con el tope de 40 % de part-time,** ningún plan con el mismo servicio sale más barato que hoy.
 
 ### Lo que la página agrega al notebook (y lo dice en cada caso)
 
