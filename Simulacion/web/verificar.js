@@ -59,6 +59,18 @@ assert(O.filas.every((f) => cerca(f.total, f.planilla + f.extra, 0.02) && cerca(
 assert(O.filas.every((f, i) => !i || f.total >= O.filas[i - 1].total), 'tabla ordenada por costo');
 assert(rec.ahorro > 0 && rec.perdida <= O.hoy.perdida && rec.espera <= O.hoy.espera, 'el recomendado ahorra sin empeorar el servicio');
 
+// Sección 7 (escenarios): cada plan tiene la cobertura del notebook, el escenario base coincide con la sección 6,
+// la política flexible conserva el núcleo fijo y la elegida cumple en los 8 escenarios con el menor arrepentimiento
+const EC = S.ESCENARIOS_CLIENTE;
+assert.strictEqual(EC.escenarios.length, 8);
+EC.escenarios.forEach((e) => ['optimo', 'flexible'].forEach((k) => assert.deepStrictEqual(S.personalPorHora(e[k].plan), e[k].cobertura, `${e.nombre} ${k}`)));
+EC.escenarios.forEach((e) => Object.entries(EC.nucleo).forEach(([t, n]) => assert.strictEqual(e.flexible.plan[t], n, `núcleo en ${e.nombre}`)));
+assert(cerca(EC.escenarios[0].optimo.costo, rec.total, 0.01) && cerca(EC.escenarios[0].hoy.costo, O.totalHoy, 0.01), 'el escenario base es la sección 6');
+const elegida = EC.candidatos.find((c) => c.nombre === EC.eleccion);
+assert(elegida.cumple.every(Boolean));
+assert(EC.candidatos.filter((c) => c.cumple.every(Boolean)).every((c) => c.arrepentimiento >= elegida.arrepentimiento));
+EC.candidatos.forEach((c) => assert(cerca(c.promedio, c.costos.reduce((a, b) => a + b, 0) / 8, 0.01)));
+
 // Causas de la venta perdida (CSV): suman la venta perdida del notebook; ROI conservador
 assert(cerca(S.CSV.causas.reduce((s, c) => s + c.monto, 0), N.ventaPerdida, 0.01));
 assert(cerca(S.roi(milp, S.VENTA_POR_ESPERA).roi, -45.67, 0.01));
