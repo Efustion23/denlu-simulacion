@@ -384,13 +384,82 @@ function sensibilidad() {
 }
 $('factorHora').addEventListener('input', sensibilidad);
 $('verRecomendado').addEventListener('click', () => {
-  estado.plan = { ...S.PLANES.recomendado.plan }; estado.preset = 'recomendado';
+  Object.assign(estado, { plan: { ...S.PLANES.recomendado.plan }, preset: 'recomendado', crec: 0, aus: 0, caso: null });
   cambioPlan();
   $('dia').scrollIntoView({ behavior: reducirMovimiento ? 'auto' : 'smooth' });
   ponerReproduccion(true);
 });
 
-/* ---------- 6. ROI ---------- */
+/* ---------- 6. Escenarios: qué le conviene más al cliente (sección 7 del notebook) ---------- */
+
+const EC = S.ESCENARIOS_CLIENTE;
+const CORTO_ESC = ['Base 2025', 'T. baja', 'T. alta', '+10 %', 'Ausentismo', 'S/ 1,130', 'Agencia', 'Mejor servicio'];
+const DESC_ESC = [
+  'La demanda promedio de 2025, la misma de la sección anterior.',
+  'Febrero, el mes más tranquilo del CSV: 16 % menos pedidos que el promedio.',
+  'Diciembre, el mes con más pedidos del CSV: 27 % más que el promedio (en 2025 trabajaron 4 despachadores).',
+  'Si en 2026 la demanda crece 10 %.',
+  'Cada trabajador falta, en promedio, 1 de cada 20 días.',
+  'Si los sueldos se calculan con un mínimo de S/ 1,130 en vez de S/ 1,025: todos los costos de personal suben 10 %.',
+  'Si el personal por horas se contrata con una agencia y cada hora cuesta 20 % más.',
+  'Si el cliente exige perder como máximo el 3 % de las rutas y esperar como máximo 10 min en promedio.',
+];
+const minimoRho1 = (demanda) => S.LAMBDA.map((l) => Math.floor((l * demanda) / S.MU_H) + 1);
+const chipsPlan = (plan, sinNucleo) => Object.entries(plan).filter(([t]) => !(sinNucleo && EC.nucleo[t]))
+  .map(([t, n]) => `<span class="chip ${S.TURNOS[t].porHoras ? 'ph' : t === 'FT 10 h' ? 'diez' : ''}">${n} × ${t.startsWith('H ') ? `por horas ${t.slice(2)}` : t}</span>`).join('');
+let casoElegido = 0;
+$('casosChips').innerHTML = EC.escenarios.map((e, i) => `<button type="button" role="tab" data-i="${i}">${e.nombre}</button>`).join('');
+$('casosChips').addEventListener('click', (e) => { if (e.target.dataset.i !== undefined) elegirCaso(Number(e.target.dataset.i)); });
+function elegirCaso(i) {
+  casoElegido = i;
+  document.querySelectorAll('#casosChips button').forEach((b) => b.setAttribute('aria-selected', Number(b.dataset.i) === i));
+  document.querySelectorAll('#tablaMatriz [data-col]').forEach((c) => c.classList.toggle('sel', Number(c.dataset.col) === i));
+  const e = EC.escenarios[i], f = e.flexible;
+  $('casoDesc').innerHTML = `<strong>${e.nombre}.</strong> ${DESC_ESC[i]} Meta de servicio: perder como máximo ${numero(e.meta[0], 1)} % de las rutas y esperar como máximo ${numero(e.meta[1], 1)} min en promedio.`;
+  const kpis = [
+    ['Hoy (3 × 10 h)', e.hoy.costo, (v) => soles(v, 0), e.hoy.cumple ? `cumple: ${numero(e.hoy.perdida, 1)} % de rutas perdidas` : `<span class="mal">no cumple: ${numero(e.hoy.perdida, 1)} % de rutas perdidas, ${numero(e.hoy.espera, 1)} min de espera</span>`],
+    ['Mejor plan posible', e.optimo.costo, (v) => soles(v, 0), `${totalPersonas(e.optimo.plan)} personas; ${numero(e.optimo.perdida, 1)} % de rutas perdidas`],
+    ['Política flexible', f.costo, (v) => soles(v, 0), `${totalPersonas(f.plan)} personas; ${numero(f.perdida, 1)} % de rutas perdidas, ${numero(f.espera, 1)} min`, true],
+    [e.hoy.cumple ? 'Ahorro frente a hoy' : 'Costo extra frente a hoy', Math.abs(e.hoy.costo - f.costo), (v) => soles(v, 0), e.hoy.cumple ? (e.hoy.costo >= f.costo ? `al mes, con el mismo servicio` : 'al mes: aquí hoy es más barato') : 'al mes, para cumplir la meta que hoy no cumple'],
+  ];
+  $('casoKpis').innerHTML = kpis.map(([et, , , pie, lider]) => `<div class="${lider ? 'lider' : ''}"><dt>${et}</dt><dd>0</dd><span class="pie">${pie}</span></div>`).join('');
+  $('casoKpis').querySelectorAll('dd').forEach((dd, k) => contar(dd, kpis[k][1], kpis[k][2], 600));
+  $('casoPlan').innerHTML = chipsPlan(f.plan, true) || '<span class="chip">nadie más</span>';
+  if (graficos.caso) CREAR.caso();
+}
+function pintarMatriz() {
+  const eleccion = EC.candidatos.find((c) => c.nombre === EC.eleccion);
+  $('tablaMatriz').innerHTML = `<thead><tr><th>Plan</th>${CORTO_ESC.map((n, j) => `<th data-col="${j}" class="col-esc" title="${EC.escenarios[j].nombre}">${n}</th>`).join('')}
+      <th>Cumple</th><th>Costo promedio</th><th>Máx. arrepentimiento</th></tr></thead>
+    <tbody>${EC.candidatos.map((c) => `<tr class="${c.nombre === EC.eleccion ? 'elegido' : ''}"><td>${c.nombre}</td>
+      ${c.costos.map((v, j) => `<td data-col="${j}" class="cifra ${c.cumple[j] ? 'cumple' : 'falla'}" title="${c.cumple[j] ? 'Cumple' : 'No cumple la meta de servicio'}">${numero(v, 0)}${c.cumple[j] ? '' : ' ✗'}</td>`).join('')}
+      <td class="cifra">${c.cumple.filter(Boolean).length} de 8</td><td class="cifra">${soles(c.promedio, 0)}</td>
+      <td class="cifra">${c.arrepentimiento === null ? '<span class="peor">falla en algún escenario</span>' : soles(c.arrepentimiento, 0)}</td></tr>`).join('')}</tbody>`;
+  document.querySelectorAll('#tablaMatriz th[data-col]').forEach((th) => th.addEventListener('click', () => elegirCaso(Number(th.dataset.col))));
+  const milp = EC.candidatos.find((c) => c.nombre.startsWith('Plan MILP')), alta = EC.candidatos.find((c) => c.nombre.startsWith('Óptimo de temporada alta'));
+  const hoyC = EC.candidatos.find((c) => c.nombre.startsWith('Hoy')), rec = EC.candidatos.find((c) => c.nombre.startsWith('Plan recomendado'));
+  const fila = (k) => { const e = EC.escenarios[k]; return `<tr><td>${e.nombre}</td><td>${chipsPlan(e.flexible.plan, true)}</td><td class="cifra">${soles(e.flexible.costo, 0)}</td></tr>`; };
+  $('recomendacion').innerHTML = `
+    <p class="reco-et">Lo que más le conviene a DENLU</p>
+    <h3>Una política flexible: núcleo fijo + personal por horas según la temporada</h3>
+    <p>Un <strong>núcleo fijo de 2 personas</strong> (${chipsPlan(EC.nucleo, false)}) y <strong>personal por horas (y algún medio tiempo) que se contrata según los pedidos esperados</strong>:</p>
+    <div class="tabla-ancha"><table class="resultados"><thead><tr><th>Escenario</th><th>Se suma al núcleo</th><th>Costo al mes</th></tr></thead><tbody>${[0, 1, 2, 3].map(fila).join('')}</tbody></table></div>
+    <ul>
+      <li><strong>Es la única que cumple la meta de servicio en los 8 escenarios</strong> a un costo razonable: ${soles(eleccion.promedio, 0)} al mes en promedio, y nunca más de ${soles(eleccion.arrepentimiento, 0)} por encima del mejor plan posible de cada escenario.</li>
+      <li><strong>Los 3 despachadores de hoy</strong> fallan en ${8 - hoyC.cumple.filter(Boolean).length} de 8 escenarios (temporada alta, crecimiento, ausentismo y mejor servicio). <strong>El plan de la sección anterior dejado fijo todo el año</strong> queda justo en el límite y también falla en ${8 - rec.cumple.filter(Boolean).length}.</li>
+      <li><strong>El plan MILP</strong> cuesta ${soles(milp.promedio - eleccion.promedio, 0)} más al mes en promedio y falla en diciembre. <strong>Contratar todo el año para diciembre</strong> cumple siempre, pero cuesta ${soles(alta.promedio - eleccion.promedio, 0)} más al mes en promedio.</li>
+      <li><strong>Cómo aplicarla:</strong> contratar el núcleo, tener una bolsa de personal por horas entrenado y revisar el plan cada mes con los pedidos esperados. Si la hora por horas sube más de ~${numero(O.equilibrioPct, 0)} % sobre la de medio tiempo, cambiar esos bloques por medio tiempo de 4 h.</li>
+    </ul>`;
+}
+$('simularCaso').addEventListener('click', () => {
+  const e = EC.escenarios[casoElegido];
+  Object.assign(estado, { plan: { ...e.flexible.plan }, preset: null, crec: Math.round((e.demanda - 1) * 1000) / 10, aus: e.ausentismo * 100, caso: e.nombre });
+  cambioPlan();
+  $('dia').scrollIntoView({ behavior: reducirMovimiento ? 'auto' : 'smooth' });
+  ponerReproduccion(true);
+});
+
+/* ---------- 8. ROI ---------- */
 
 let modoRoi = 'notebook';
 $('vistaRoi').addEventListener('click', (e) => {
@@ -461,13 +530,13 @@ $('presets').innerHTML = Object.entries(S.PLANES)
 $('presets').addEventListener('click', (e) => {
   const k = e.target.dataset.preset;
   if (!k) return;
-  estado.plan = { ...S.PLANES[k].plan };
-  estado.preset = k;
+  Object.assign(estado, { plan: { ...S.PLANES[k].plan }, preset: k, crec: 0, aus: 0, caso: null });
   cambioPlan();
 });
 function cambioPlan() {
   document.querySelectorAll('#presets button').forEach((b) => b.setAttribute('aria-pressed', b.dataset.preset === estado.preset));
-  $('costoMes').textContent = estado.preset === 'actual' ? `${soles(S.costoMensual(estado.plan), 2)} + ${soles(O.costoExtraHoy, 0)} de horas extra` : soles(S.costoMensual(estado.plan), 2);
+  $('costoMes').textContent = estado.preset === 'actual' ? `${soles(S.costoMensual(estado.plan), 2)} + ${soles(O.costoExtraHoy, 0)} de horas extra`
+    : estado.caso ? `${soles(S.costoMensual(estado.plan), 2)} · escenario ${estado.caso}, política flexible` : soles(S.costoMensual(estado.plan), 2);
   const n = totalPersonas(estado.plan);
   $('totalPersonas').textContent = `${n} despachador${n === 1 ? '' : 'es'}`;
   nuevoDia();
@@ -581,6 +650,20 @@ const CREAR = {
       options: op,
     });
   },
+  caso: () => {
+    const e = EC.escenarios[casoElegido];
+    const op = opcionesBase(`Despachadores por hora · ${e.nombre}`);
+    op.scales.y.ticks.stepSize = 1;
+    nuevo('caso', 'gCaso', {
+      data: { labels: etiquetasHora, datasets: [
+        barra('Hoy (3 × 10 h)', e.hoy.cumple ? C['serie-actual'] : C.rojo, ESCENARIOS.actual.c),
+        barra('Mejor plan posible', C['serie-plan'], e.optimo.cobertura),
+        barra('Política flexible', C.verde, e.flexible.cobertura),
+        linea('Mínimo para ρ < 1', C.tinta, minimoRho1(e.demanda), { borderDash: [5, 4], stepped: 'middle', borderWidth: 1.5 }),
+      ] },
+      options: op,
+    });
+  },
   optCob: () => {
     const op = opcionesBase('Despachadores por hora: hoy, plan MILP y plan recomendado');
     op.scales.y.ticks.stepSize = 1;
@@ -673,6 +756,7 @@ const alVer = {
   porhora: () => { mostrarGraficos('porHora'); pintarHorario(true); },
   plan: () => { mostrarGraficos('cobertura'); pintarGantt('milp'); },
   optimo: () => { mostrarGraficos('optimo', 'optCob', 'ocio'); pintarOptimo(); },
+  casos: () => { pintarMatriz(); mostrarGraficos('caso'); elegirCaso(casoElegido); },
   metricas: () => { mostrarGraficos('metrica'); pintarMetrica(); },
   roi: () => animarCascada(),
   dia: () => { if (!reducirMovimiento && dia.log.length && dia.t === 0) ponerReproduccion(true); },

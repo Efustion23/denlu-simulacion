@@ -656,3 +656,30 @@ html { scroll-behavior: smooth; }
 .sw-ocio::after { content: "z"; position: absolute; inset: 0; display: grid; place-items: center; color: var(--tinta-2); font-size: 11px; font-weight: 700; }
 /* Con 8 pasos, en teléfonos angostos la barra superior deja solo los números */
 @media (max-width: 480px) { .barra .marca { display: none; } .pasos { gap: 0; } .pasos a { padding: 6px 5px; } }
+
+/* ---------- Escenarios y matriz de decisión (sección 7 del notebook) ---------- */
+.casos-chips button { min-width: 0; padding: 0 14px; }
+.caso { margin-bottom: 8px; padding: 16px; border: 1px solid var(--linea); border-radius: 12px; }
+.caso-desc { margin: 0 0 14px; font-size: 14px; line-height: 1.5; }
+.kpis-caso { margin-bottom: 14px; }
+.kpis-caso .pie .mal { color: var(--rojo); font-weight: 600; }
+.caso-flex { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin-bottom: 6px; }
+.caso-et { color: var(--tinta-2); font-size: 13px; }
+.caso-flex .plan-chips { margin: 0; }
+#simularCaso { margin-top: 6px; }
+.matriz th.col-esc { cursor: pointer; text-decoration: underline dotted; text-underline-offset: 3px; }
+.matriz td.cumple { background: color-mix(in srgb, var(--verde) 9%, transparent); }
+.matriz td.falla { background: color-mix(in srgb, var(--rojo) 12%, transparent); color: var(--rojo); font-weight: 600; }
+.matriz .sel { box-shadow: inset 2px 0 0 var(--tinta), inset -2px 0 0 var(--tinta); }
+.matriz th.sel { box-shadow: inset 2px 0 0 var(--tinta), inset -2px 0 0 var(--tinta), inset 0 2px 0 var(--tinta); }
+.matriz tr.elegido td { font-weight: 600; }
+.matriz tr.elegido td:first-child { color: var(--verde); }
+.matriz tr.elegido td:first-child::before { content: "★ "; }
+.recomendacion { margin-top: 22px; padding: 18px 20px; border: 2px solid var(--verde); border-radius: 14px; background: color-mix(in srgb, var(--verde) 6%, var(--hoja)); animation: aparecer 600ms var(--curva) both; }
+.recomendacion .reco-et { margin: 0; color: var(--verde); font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+.recomendacion h3 { margin: 4px 0 10px; font-size: 20px; line-height: 1.25; }
+.recomendacion p, .recomendacion li { font-size: 14px; line-height: 1.55; }
+.recomendacion ul { margin: 12px 0 0; padding-left: 20px; }
+.recomendacion .chip { display: inline-block; margin: 1px 2px; padding: 3px 9px; font-size: 12px; }
+.recomendacion .resultados td:nth-child(2) { text-align: left; }
+@media (max-width: 860px) { .recomendacion { padding: 14px; } .recomendacion h3 { font-size: 17px; } }

@@ -24,9 +24,10 @@
       <a href="#porhora"><span class="num">3</span><span class="txt">Por hora</span></a>
       <a href="#plan"><span class="num">4</span><span class="txt">Plan</span></a>
       <a href="#optimo"><span class="num">5</span><span class="txt">Óptimo</span></a>
-      <a href="#metricas"><span class="num">6</span><span class="txt">Métricas</span></a>
-      <a href="#roi"><span class="num">7</span><span class="txt">ROI</span></a>
-      <a href="#dia"><span class="num">8</span><span class="txt">Un día</span></a>
+      <a href="#casos"><span class="num">6</span><span class="txt">Escenarios</span></a>
+      <a href="#metricas"><span class="num">7</span><span class="txt">Métricas</span></a>
+      <a href="#roi"><span class="num">8</span><span class="txt">ROI</span></a>
+      <a href="#dia"><span class="num">9</span><span class="txt">Un día</span></a>
     </nav>
     <button type="button" class="tema" id="tema" aria-pressed="false" aria-label="Tema oscuro" title="Cambiar entre tema claro y oscuro">
           <svg class="luna" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
@@ -230,9 +231,34 @@
       <div class="grafico grafico-bajo"><canvas id="gOcio" aria-label="Horas pagadas sin pedidos por día en cada escenario"></canvas></div>
     </section>
 
+    <section class="bloque paso-seccion revelar" id="casos" aria-labelledby="tCasos">
+      <div class="bloque-cab">
+        <h2 id="tCasos"><span class="num">6</span>Escenarios: ¿qué le conviene más a DENLU?</h2>
+        <span class="estado">8 escenarios · matriz de decisión · sección 7 del notebook</span>
+      </div>
+      <p class="nota-bloque">El plan óptimo depende de lo que pase: el CSV muestra temporadas (febrero tiene 16 % menos pedidos que el promedio y diciembre 27 % más, por eso en diciembre trabajaron 4 despachadores), y además pueden faltar trabajadores, subir el sueldo mínimo o cambiar lo que exige el cliente. Elige un escenario para ver su mejor plan.</p>
+      <div class="horas casos-chips" id="casosChips" role="tablist" aria-label="Escenario"></div>
+      <div class="caso" id="caso" aria-live="polite">
+        <p class="caso-desc" id="casoDesc"></p>
+        <dl class="kpis kpis-caso" id="casoKpis"></dl>
+        <div class="caso-flex">
+          <span class="caso-et">Política flexible en este escenario: núcleo fijo + </span>
+          <div class="plan-chips" id="casoPlan"></div>
+        </div>
+        <div class="grafico grafico-medio"><canvas id="gCaso" aria-label="Despachadores por hora en el escenario elegido"></canvas></div>
+        <button type="button" class="primario-chico" id="simularCaso">Simular este escenario en el día animado</button>
+      </div>
+
+      <h3 class="sub">Matriz de decisión: cada plan en los 8 escenarios</h3>
+      <p class="nota-bloque">Costo mensual de cada plan en cada escenario. En rojo, los escenarios donde el plan no cumple la meta de servicio. El <strong>máximo arrepentimiento</strong> es lo más que un plan llega a costar por encima del mejor plan posible de algún escenario; si falla en alguno, no se calcula.</p>
+      <div class="tabla-ancha"><table class="resultados matriz" id="tablaMatriz"></table></div>
+
+      <div class="recomendacion" id="recomendacion"></div>
+    </section>
+
     <section class="bloque paso-seccion revelar" id="metricas" aria-labelledby="tMetricas">
       <div class="bloque-cab">
-        <h2 id="tMetricas"><span class="num">6</span>Métricas de colas del plan</h2>
+        <h2 id="tMetricas"><span class="num">7</span>Métricas de colas del plan</h2>
         <span class="estado">L, W, L<sub>q</sub>, W<sub>q</sub> · llegadas · bondad de ajuste · utilización</span>
       </div>
       <div class="pestanas" id="pestanas" role="tablist" aria-label="Métrica">
@@ -252,7 +278,7 @@
 
     <section class="bloque paso-seccion revelar" id="roi" aria-labelledby="tRoi">
       <div class="bloque-cab">
-        <h2 id="tRoi"><span class="num">7</span>¿Vale la pena? Retorno de la inversión</h2>
+        <h2 id="tRoi"><span class="num">8</span>¿Vale la pena? Retorno de la inversión</h2>
         <span class="estado">plan MILP frente a 3 fijos</span>
       </div>
       <div class="segmentado" id="vistaRoi" role="group" aria-label="Supuesto del ROI">
@@ -273,7 +299,7 @@
 
       <section class="bloque paso-seccion revelar" id="dia" aria-labelledby="tDia">
         <div class="bloque-cab">
-          <h2 id="tDia"><span class="num">8</span>Un día en el almacén</h2>
+          <h2 id="tDia"><span class="num">9</span>Un día en el almacén</h2>
           <span class="estado" id="estadoDia" aria-live="polite"></span>
         </div>
         <p class="nota-bloque">El almacén en 3D (o en plano 2D). Los pedidos llegan por teléfono y vendedores, se imprimen y esperan en el tablero. Cada despachador toma una hoja y la lleva a la <strong>zona de acopio</strong>, donde el encargado hace la lista de productos del pedido; con esa lista recoge la mercadería en los estantes, la junta en su palé del acopio y la revisa contra la lista, la empaca en su mesa y la lleva al camión de su ruta. En el almuerzo o fuera de turno está en el comedor. Es una ilustración que no forma parte de <code>Denlu.ipynb</code>: un día simulado pedido por pedido con las tasas λ por hora del diagnóstico y μ = 44.5 min. Supone, como en los datos de 2025, que el 5.82 % de los pedidos llega sin stock y se cancela en ventas, que un pedido que espera más de 72 min pierde su ruta (así se repite el 5.3 % de rutas perdidas del CSV) y que en el acopio hacer la lista y revisar los productos toman cerca del 15 % del tiempo de despacho cada uno (unos 6.7 de los 44.5 min): son parte de ese tiempo, así que las cifras no cambian.</p>

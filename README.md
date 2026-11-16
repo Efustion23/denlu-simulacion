@@ -11,11 +11,11 @@ Trabajo de Investigación de Operaciones 1: optimización de personal en el alma
 
 | Ruta | Qué es |
 |---|---|
-| [`Simulacion/Denlu.ipynb`](Simulacion/Denlu.ipynb) | El notebook del trabajo: diagnóstico con colas M/M/c, requerimiento por hora, modelo MILP con OR-Tools, cobertura, ROI, métricas L, W, L<sub>q</sub>, W<sub>q</sub>, tiempo entre llegadas, bondad de ajuste y utilización frente al 80 %. La **sección 6** (nueva, al final) hace la optimización realista: costo real de hoy con horas extra, simulación de eventos discretos validada con el CSV, modalidades de contratación (full-time, jornada de 10 h, medio tiempo, por horas) y el plan más barato con ρ < 1 que no empeora el servicio. |
-| [`Simulacion/web/`](Simulacion/web/) | Página guiada en ocho pasos con las cifras del notebook (ver abajo). Funciona sin internet: Chart.js, Three.js r147 y la tipografía Barlow van incluidos en `vendor/` y `fonts/`. |
+| [`Simulacion/Denlu.ipynb`](Simulacion/Denlu.ipynb) | El notebook del trabajo: diagnóstico con colas M/M/c, requerimiento por hora, modelo MILP con OR-Tools, cobertura, ROI, métricas L, W, L<sub>q</sub>, W<sub>q</sub>, tiempo entre llegadas, bondad de ajuste y utilización frente al 80 %. La **sección 6** (nueva, al final) hace la optimización realista: costo real de hoy con horas extra, simulación de eventos discretos validada con el CSV, modalidades de contratación (full-time, jornada de 10 h, medio tiempo, por horas) y el plan más barato con ρ < 1 que no empeora el servicio. La **sección 7** evalúa 8 escenarios (temporada baja y alta, crecimiento, ausentismo, sueldo mínimo, agencia y mejor servicio) con una matriz de decisión y recomienda al cliente una política flexible. |
+| [`Simulacion/web/`](Simulacion/web/) | Página guiada en nueve pasos con las cifras del notebook (ver abajo). Funciona sin internet: Chart.js, Three.js r147 y la tipografía Barlow van incluidos en `vendor/` y `fonts/`. |
 | [`Simulacion/agregados_csv.py`](Simulacion/agregados_csv.py) | Calcula, a partir del CSV, los agregados que usa la página para demostrar la cola (no publica el CSV). |
 
-### Los ocho pasos de la página
+### Los nueve pasos de la página
 
 1. **La cola.** Demostración de que se forma una cola:
    - Las fórmulas M/M/c.
@@ -30,9 +30,13 @@ Trabajo de Investigación de Operaciones 1: optimización de personal en el alma
    - Compara el costo de cada modalidad de contratación con el costo real de hoy, con y sin el tope de 40 % de part-time.
    - Muestra el plan recomendado y un control para ver si conviene contratar por horas según cuánto cueste esa hora.
    - Mide el ocio pagado.
-6. **Métricas.** L, W, L<sub>q</sub>, W<sub>q</sub>; el tiempo entre llegadas; la bondad de ajuste a Poisson; y la utilización frente al 80 %.
-7. **ROI.** El cálculo del notebook y, al lado, uno conservador, con las causas de la venta perdida.
-8. **Un día en el almacén.** Animación ilustrativa en 3D o en plano 2D, con la situación actual, el plan MILP, el plan alternativo o el plan recomendado. Muestra con "zz" a los despachadores pagados sin pedidos y cuenta el costo de ese ocio.
+6. **Escenarios** (sección 7 del notebook):
+   - Un selector de 8 escenarios que muestra el mejor plan posible y la política flexible de cada uno, comparados con hoy. Un botón lleva cada escenario al día animado.
+   - La matriz de decisión: cada plan en los 8 escenarios, cuántos cumple, su costo promedio y su máximo arrepentimiento.
+   - La recomendación al cliente.
+7. **Métricas.** L, W, L<sub>q</sub>, W<sub>q</sub>; el tiempo entre llegadas; la bondad de ajuste a Poisson; y la utilización frente al 80 %.
+8. **ROI.** El cálculo del notebook y, al lado, uno conservador, con las causas de la venta perdida.
+9. **Un día en el almacén.** Animación ilustrativa en 3D o en plano 2D, con la situación actual, el plan MILP, el plan alternativo o el plan recomendado. Muestra con "zz" a los despachadores pagados sin pedidos y cuenta el costo de ese ocio.
 
 ### Resultado de la optimización realista (sección 6)
 
@@ -43,6 +47,21 @@ Trabajo de Investigación de Operaciones 1: optimización de personal en el alma
   - Baja el ocio pagado a 10.9 h por día.
 - **Contratar por horas** conviene mientras esa hora no cueste más de ~14 % sobre la del medio tiempo.
 - **Con el tope de 40 % de part-time,** ningún plan con el mismo servicio sale más barato que hoy.
+
+### Recomendación al cliente (sección 7)
+
+Lo que más le conviene a DENLU es una **política flexible**:
+- un núcleo fijo de 2 personas: 1 jornada de 10 h + 1 FT-1;
+- personal por horas (y algún medio tiempo) según la temporada: 4 bloques por horas en un mes normal, 3 personas en temporada baja y 8 bloques por horas en diciembre.
+
+| Plan | Cumple el servicio | Costo promedio | Máximo arrepentimiento |
+|---|---|---|---|
+| Hoy (3 × 10 h) | 4 de 8 escenarios | S/ 5,301 | falla en algún escenario |
+| Plan MILP (sección 3) | 7 de 8 | S/ 5,786 | falla en diciembre |
+| Plan espera ≤ 15 min | 8 de 8 | S/ 7,823 | S/ 3,021 |
+| Plan recomendado (sección 6) fijo todo el año | 4 de 8 | S/ 5,114 | falla en algún escenario |
+| Óptimo de temporada alta todo el año | 8 de 8 | S/ 6,220 | S/ 1,278 |
+| **Política flexible** | **8 de 8** | **S/ 5,409** | **S/ 110** |
 
 ### Lo que la página agrega al notebook (y lo dice en cada caso)
 
