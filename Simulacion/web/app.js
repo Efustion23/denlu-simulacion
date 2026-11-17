@@ -441,15 +441,16 @@ function pintarMatriz() {
   const fila = (k) => { const e = EC.escenarios[k]; return `<tr><td>${e.nombre}</td><td>${chipsPlan(e.flexible.plan, true)}</td><td class="cifra">${soles(e.flexible.costo, 0)}</td></tr>`; };
   $('recomendacion').innerHTML = `
     <p class="reco-et">Lo que más le conviene a DENLU</p>
-    <h3>Una política flexible: núcleo fijo + personal por horas según la temporada</h3>
-    <p>Un <strong>núcleo fijo de 2 personas</strong> (${chipsPlan(EC.nucleo, false)}) y <strong>personal por horas (y algún medio tiempo) que se contrata según los pedidos esperados</strong>:</p>
-    <div class="tabla-ancha"><table class="resultados"><thead><tr><th>Escenario</th><th>Se suma al núcleo</th><th>Costo al mes</th></tr></thead><tbody>${[0, 1, 2, 3].map(fila).join('')}</tbody></table></div>
+    <h3>Núcleo fijo de 2 personas + personal por horas según la temporada</h3>
+    <p>${chipsPlan(EC.nucleo, false)} todo el año, y se suma personal por horas según los pedidos esperados. Es el único plan que cumple el servicio en los 8 escenarios: <strong>${soles(eleccion.promedio, 0)} al mes</strong> en promedio.</p>
+    <div class="tabla-ancha"><table class="resultados"><thead><tr><th>Temporada</th><th>Se suma al núcleo</th><th>Costo al mes</th></tr></thead><tbody>${[1, 0, 2].map(fila).join('')}</tbody></table></div>
+    <details class="porque"><summary>¿Por qué esta y no otra?</summary>
     <ul>
       <li><strong>Es la única que cumple la meta de servicio en los 8 escenarios</strong> a un costo razonable: ${soles(eleccion.promedio, 0)} al mes en promedio, y nunca más de ${soles(eleccion.arrepentimiento, 0)} por encima del mejor plan posible de cada escenario.</li>
       <li><strong>Los 3 despachadores de hoy</strong> fallan en ${8 - hoyC.cumple.filter(Boolean).length} de 8 escenarios (temporada alta, crecimiento, ausentismo y mejor servicio). <strong>El plan de la sección anterior dejado fijo todo el año</strong> queda justo en el límite y también falla en ${8 - rec.cumple.filter(Boolean).length}.</li>
       <li><strong>El plan MILP</strong> cuesta ${soles(milp.promedio - eleccion.promedio, 0)} más al mes en promedio y falla en diciembre. <strong>Contratar todo el año para diciembre</strong> cumple siempre, pero cuesta ${soles(alta.promedio - eleccion.promedio, 0)} más al mes en promedio.</li>
       <li><strong>Cómo aplicarla:</strong> contratar el núcleo, tener una bolsa de personal por horas entrenado y revisar el plan cada mes con los pedidos esperados. Si la hora por horas sube más de ~${numero(O.equilibrioPct, 0)} % sobre la de medio tiempo, cambiar esos bloques por medio tiempo de 4 h.</li>
-    </ul>`;
+    </ul></details>`;
 }
 $('simularCaso').addEventListener('click', () => {
   const e = EC.escenarios[casoElegido];
@@ -754,14 +755,18 @@ const alVer = {
   cola: () => { mostrarGraficos('colaReal', 'esperan'); if (typeof DemoCola !== 'undefined') DemoCola.ver(); },
   diagnostico: () => { mostrarGraficos('rho'); elegirHora(horaElegida); },
   porhora: () => { mostrarGraficos('porHora'); pintarHorario(true); },
-  plan: () => { mostrarGraficos('cobertura'); pintarGantt('milp'); },
-  optimo: () => { mostrarGraficos('optimo', 'optCob', 'ocio'); pintarOptimo(); },
+  plan: () => { pintarOptimo(); mostrarGraficos('cobertura'); pintarGantt('recomendado'); },
+  optimo: () => mostrarGraficos('optimo', 'optCob', 'ocio'),
   casos: () => { pintarMatriz(); mostrarGraficos('caso'); elegirCaso(casoElegido); },
   metricas: () => { mostrarGraficos('metrica'); pintarMetrica(); },
   roi: () => animarCascada(),
   dia: () => { if (!reducirMovimiento && dia.log.length && dia.t === 0) ponerReproduccion(true); },
 };
 const vistos = new Set();
+// Al abrir un "Ver más", los gráficos que estaban ocultos toman su tamaño real
+document.querySelectorAll('details.mas').forEach((d) => d.addEventListener('toggle', () => {
+  if (d.open) requestAnimationFrame(() => Object.values(graficos).forEach((g) => g.resize()));
+}));
 const observador = new IntersectionObserver((entradas) => entradas.forEach((e) => {
   if (!e.isIntersecting) return;
   e.target.classList.add('visible');
@@ -1885,7 +1890,7 @@ pintarBotonTema();
 pintarPortada();
 pintarEvidencia();
 pintarHorario(true);
-pintarGantt('milp');
+pintarGantt('recomendado');
 pintarMetrica();
 pintarRoi(false);
 pintarCausas();
