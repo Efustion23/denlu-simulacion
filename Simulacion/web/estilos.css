@@ -683,3 +683,24 @@ html { scroll-behavior: smooth; }
 .recomendacion .chip { display: inline-block; margin: 1px 2px; padding: 3px 9px; font-size: 12px; }
 .recomendacion .resultados td:nth-child(2) { text-align: left; }
 @media (max-width: 860px) { .recomendacion { padding: 14px; } .recomendacion h3 { font-size: 17px; } }
+
+/* ---------- Página resumida: 5 pasos y el detalle en "Ver más" ---------- */
+details.mas { margin-top: 12px; border: 1px solid var(--linea); border-radius: 10px; }
+details.mas > summary {
+  display: block; padding: 11px 14px; color: var(--tinta); font-size: 14px; font-weight: 500;
+  list-style: none; cursor: pointer; transition: background-color 150ms var(--curva);
+}
+details.mas > summary::-webkit-details-marker { display: none; }
+details.mas > summary::before { content: "+"; display: inline-grid; place-items: center; margin-right: 8px; vertical-align: -4px; width: 20px; height: 20px; border-radius: 50%; background: var(--panel); color: var(--tinta-2); font-weight: 600; transition: transform 200ms var(--curva); }
+details.mas[open] > summary::before { content: "−"; }
+details.mas > summary:hover { background: var(--panel); }
+details.mas[open] > summary { border-bottom: 1px solid var(--linea); }
+.mas-cuerpo { padding: 14px 16px 18px; animation: aparecer 300ms var(--curva) both; }
+.mas-cuerpo > .subpaso > .sub:first-child { margin-top: 0; }
+.sub.sub-mas { margin: 28px 0 4px; color: var(--tinta-2); font-size: 13px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
+#verRecomendado { margin: 4px 0 0; }
+.portada .hallazgo { max-width: 62ch; }
+#casos .recomendacion { margin: 0 0 18px; }
+.recomendacion details.porque { margin-top: 10px; }
+.recomendacion details.porque summary { color: var(--verde); font-size: 14px; font-weight: 600; cursor: pointer; }
+.nota-larga { max-width: none; }
