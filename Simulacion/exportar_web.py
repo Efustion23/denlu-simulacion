@@ -33,11 +33,11 @@ resultados, por_mes, por_dia = {}, {}, {}
 for cid, nombre, corto, plan in CASOS:
     f = pd.DataFrame(C.simular_anio(df, plan))
     c = int(f.cancelados.sum()); vp = f.venta_perdida.sum(); cm = C.costo_mensual(plan)
+    mp = f.margen_perdido.sum()
     resultados[cid] = dict(cancelados=c, pct=round(100 * c / len(df), 2), espera=round(f.espera_total.sum() / (len(df) - c), 2),
-                           ventaPerdida=round(vp, 2), margenPerdido=round(C.MARGEN * vp, 2), costoMes=cm,
-                           total=round(12 * cm + C.MARGEN * vp, 2))
+                           ventaPerdida=round(vp, 2), margenPerdido=round(mp, 2), costoMes=cm, total=round(12 * cm + mp, 2))
     f['mes'] = pd.to_datetime(f.fecha).dt.month
-    por_mes[cid] = [round(C.MARGEN * v, 2) for v in f.groupby('mes').venta_perdida.sum()]
+    por_mes[cid] = [round(v, 2) for v in f.groupby('mes').margen_perdido.sum()]
     por_dia[cid] = f.set_index('fecha').cancelados
 hoy = resultados['c2']
 for r in resultados.values():
@@ -59,14 +59,30 @@ for lam in LAMBDA:
     Q = max(0.0, Q + lam - 2 * MU)
     flujo.append(round(Q, 3))
 
+# Productos de cada pedido, compactos: por línea, el producto (un carácter) y la cantidad (base 36)
+det = pd.read_csv(AQUI / 'datos/denlu_2025_detalle.csv')
+CAT = pd.read_csv(AQUI / 'datos/denlu_productos.csv')
+CHARS = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'
+assert len(CAT) <= len(CHARS) and det.cantidad.max() < 36
+fila = {p: i for i, p in enumerate(df.id_pedido)}
+LINEAS = [''] * len(df)
+for pid, g in det.groupby('id_pedido', sort=False):
+    LINEAS[fila[pid]] = ''.join(CHARS[k] + np.base_repr(q, 36).lower() for k, q in zip(g.id_producto, g.cantidad))
+# Secciones ordenadas por demanda (pedidos que pasan por ellas): la más visitada va más cerca de empaque y acopio
+visitas = det.groupby('seccion').id_pedido.nunique().sort_values(ascending=False)
+SECC = list(visitas.index)
+por_producto = det.groupby('id_producto').agg(veces=('id_pedido', 'size'), unidades=('cantidad', 'sum'),
+                                              venta=('subtotal_S', 'sum'), ganancia=('margen_S', 'sum'))
+
 por_fecha = df.groupby('fecha')
 top = por_fecha.size().sort_values(ascending=False, kind='stable').head(10)
 dias_js = [[fecha, g.campana.iloc[0] if isinstance(g.campana.iloc[0], str) else '',
-            [v for a, s, m in zip(g.llegada_min, g.tiempo_servicio_min, g.monto_pedido_S) for v in (a, s, m)]]
+            [v for a, s, m, gm in zip(g.llegada_min, g.tiempo_servicio_min, g.monto_pedido_S, g.margen_pedido_S) for v in (a, s, m, gm)],
+            '|'.join(LINEAS[i] for i in g.index)]
            for fecha, g in por_fecha]
 
 datos = {
-    'param': dict(MU=round(MU, 6), MU_MIN=round(60 / MU, 4), TOL=C.TOLERANCIA, MARGEN=C.MARGEN, RMV=C.RMV, C_FT=C.C_FT,
+    'param': dict(MU=round(MU, 6), MU_MIN=round(60 / MU, 4), TOL=C.TOLERANCIA, MARGEN=round(df.margen_pedido_S.sum() / df.monto_pedido_S.sum(), 4), RMV=C.RMV, C_FT=C.C_FT,
                   C_FIJO=C.C_FIJO, C_MT=C.C_MT, C_EXTRA_2H=C.C_EXTRA_2H, TARIFA_HORA=C.TARIFA_HORA, DIAS_MES=C.DIAS_MES,
                   RHO_MAX=0.85, dias=dias, pedidos=len(df), venta=round(df.monto_pedido_S.sum(), 2)),
     'lambda': LAMBDA, 'D': D,
@@ -80,6 +96,11 @@ datos = {
     'criticos': [dict(fecha=f, pedidos=int(n), campana=dias_js[[d[0] for d in dias_js].index(f)][1],
                       cancelados={cid: int(por_dia[cid][f]) for cid in por_dia}) for f, n in top.items()],
     'dias': dias_js,
+    'secciones': [dict(nombre=sec, visitas=int(visitas[sec])) for sec in SECC],
+    'productos': [dict(nombre=r.producto, seccion=SECC.index(r.seccion), precio=r.precio_S, margen=r.margen_pct,
+                       veces=int(por_producto.veces[r.id_producto]), unidades=int(por_producto.unidades[r.id_producto]),
+                       venta=round(por_producto.venta[r.id_producto], 2), ganancia=round(por_producto.ganancia[r.id_producto], 2))
+                  for r in CAT.itertuples()],
 }
 texto = json.dumps(datos, ensure_ascii=False, separators=(',', ':'))
 (AQUI / 'web/datos2025.js').write_text(

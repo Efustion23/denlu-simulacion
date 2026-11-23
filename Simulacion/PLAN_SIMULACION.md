@@ -27,7 +27,12 @@ totales del año que muestra son iguales a los del notebook.
    instante.
 4. **Días críticos.** Un menú con los 10 días de más pedidos (campaña de Navidad, Fiestas Patrias...) y un
    selector de cualquier fecha.
-5. **El dinero en cada caso.** Contadores del día (en cola, despachados, cancelados, venta perdida) y del año
+5. **Secciones del almacén.** La estantería se divide en 8 secciones, ubicadas por demanda: la más pedida (Arroz y
+   azúcar) queda más cerca de empaque y acopio, y la menos pedida (Higiene personal), más lejos. Cada despachador
+   camina a las secciones de los productos de su pedido. Debajo de la simulación, una tabla cuenta por sección lo
+   que va pasando, del día o del año: recorridos, unidades despachadas, venta, ganancia, unidades perdidas y el
+   producto con más unidades.
+6. **El dinero en cada caso.** Contadores del día (en cola, despachados, cancelados, venta perdida) y del año
    (cancelados, venta perdida, ganancia perdida, planilla pagada, costo total y ahorro o pérdida frente a hoy),
    más un gráfico de la ganancia perdida acumulada frente a la de hoy.
 
@@ -38,7 +43,7 @@ Ventas recibe el pedido ──► Tablero (COLA) ──► Despachador: alista �
         (sin cola)            espera            (≈ 2/3 del tiempo)      (≈ 1/3)
 ```
 
-* Un pedido llega a la hora que dice la base de datos (`llegada_min`).
+* Un pedido llega a la hora que dice la base de datos (`llegada_min`) y trae sus productos (`denlu_2025_detalle.csv`).
 * Ocupa a un despachador durante `tiempo_servicio_min` = alistado + carga (en promedio 29.75 min, μ = 2.017 pedidos/h).
 * **Orden de llegada:** cada pedido lo toma la persona que puede empezar antes.
 * **Horarios:** el personal por horas y de medio turno solo empieza pedidos dentro de su horario. Quien trabaja a
@@ -57,7 +62,8 @@ crece: eso es lo que se ve en el tablero.
 | λ por hora (promedio) | 2.33, 4.66, 5.35, 5.59, 4.10, 3.03, 4.45, 4.94, 3.66, 2.39 | sale del CSV |
 | Tiempo de servicio | exponencial, media 29.75 min | sale del CSV |
 | Tolerancia | 60 min | `TOLERANCIA` en `caso_denlu.py` y en el notebook |
-| Margen bruto | 15 % | `MARGEN` |
+| Margen de ganancia | el de cada producto (promedio 11.9 %) | catálogo `SECCIONES` en `caso_denlu.py` |
+| Secciones | 8, con 6 productos cada una | `SECCIONES` |
 | Sueldo mínimo | S/ 1,130 | `RMV` |
 | Fijo 8 h | S/ 1,546.84 al mes | calculado (EsSalud, gratificaciones, bonificación, CTS) |
 | Fijo 08–18 (hoy) | S/ 1,880.43 al mes | + 2 h extra diarias al 25 % |
@@ -69,8 +75,8 @@ crece: eso es lo que se ve en el tablero.
 
 | Archivo | Qué hace |
 |---|---|
-| `Simulacion/caso_denlu.py` | Parámetros, costos, turnos, M/M/c, simulación de un día y del año, y el MILP. |
-| `Simulacion/generar_datos_2025.py` | Crea la base de datos simulada `datos/denlu_2025.csv` y `datos/denlu_2025.xlsx` (semilla fija). |
+| `Simulacion/caso_denlu.py` | Parámetros, catálogo de secciones y productos, costos, turnos, M/M/c, simulación de un día y del año, y el MILP. |
+| `Simulacion/generar_datos_2025.py` | Crea la base de datos simulada (semilla fija): `datos/denlu_2025.csv` (pedidos), `denlu_2025_detalle.csv` (productos de cada pedido), `denlu_productos.csv` (catálogo) y `denlu_2025.xlsx`. |
 | `Simulacion/Denlu.ipynb` | El informe: planteamiento, ρ > 1, M/M/c, función objetivo, MILP de las 2 propuestas, simulación por casos, ROI. |
 | `Simulacion/exportar_web.py` | Pasa a `web/datos2025.js` los pedidos, los casos y los resultados del notebook. |
 | `Simulacion/web/simulacion.js` | La simulación en JavaScript (mismas reglas). Arma también la lista de eventos de la animación. |
@@ -81,7 +87,8 @@ crece: eso es lo que se ve en el tablero.
 
 ## 5. Cómo funciona por dentro (pasos de la implementación)
 
-1. **Datos del día.** `datos2025.js` trae, por fecha, la lista `[llegada, servicio, monto, ...]` de cada pedido.
+1. **Datos del día.** `datos2025.js` trae, por fecha, la lista `[llegada, servicio, monto, ganancia, ...]` de cada pedido y
+   sus productos (un carácter por producto y otro por la cantidad).
 2. **Simular el día** (`simularDia` en `simulacion.js`). Para cada pedido, en orden de llegada:
    * para cada persona se calcula el primer momento en que puede empezar (`enTurno`: libre y dentro de su horario);
    * se elige la de menor tiempo; si la espera pasa de 60 min, el pedido se cancela;
@@ -93,9 +100,12 @@ crece: eso es lo que se ve en el tablero.
    empaca en su mesa y la sube al camión de su ruta. Las caminatas solo reparten el tiempo de servicio entre esas etapas.
 5. **Modo año.** Al terminar un día se suma su resultado (pedidos, cancelados, venta perdida) y se carga el siguiente.
    La planilla pagada se prorratea: `12 × planilla mensual × días simulados / 298`.
-6. **Dinero.** Ganancia perdida = 15 % de la venta perdida. Costo total = planilla + ganancia perdida.
+6. **Recorrido por secciones.** Al empezar un pedido se arma su recorrido: tablero → acopio → una parada en cada sección
+   de sus productos (de la más cercana a la más lejana) → palé → mesa → camión. Al despacharse, sus productos se suman
+   a la tabla por sección; si se cancela, se suman como unidades perdidas.
+7. **Dinero.** Ganancia perdida = suma del margen de los productos de los pedidos cancelados. Costo total = planilla + ganancia perdida.
    Ahorro frente a hoy = costo total de hoy en los mismos días − costo total del caso.
-7. **Casos y días críticos.** Cambiar de caso vuelve a simular el día con otro personal. El menú de días críticos
+8. **Casos y días críticos.** Cambiar de caso vuelve a simular el día con otro personal. El menú de días críticos
    salta a esa fecha.
 
 ## 6. Cómo actualizar o publicar
@@ -122,9 +132,9 @@ si lo subes ahí.
 
 | Caso | Cancelados | Espera media | Venta perdida | Costo total al año | Frente a hoy |
 |---|---|---|---|---|---|
-| Caso 1: 1 fijo | 50.54 % | 33.2 min | S/ 3,162,489 | S/ 496,939 | pierde S/ 294,052 |
-| **Caso 2 (hoy): 2 fijos** | **16.71 %** | **21.2 min** | **S/ 1,051,705** | **S/ 202,886** | – |
-| Caso 3: 3 fijos | 3.51 % | 9.9 min | S/ 223,825 | S/ 101,269 | ahorra S/ 101,617 |
-| Caso 4: 4 fijos | 0.66 % | 3.8 min | S/ 41,049 | S/ 96,418 | ahorra S/ 106,468 |
-| Propuesta 1: por horas | 2.01 % | 6.7 min | S/ 123,601 | S/ 83,951 | **ahorra S/ 118,936** |
-| Propuesta 2: medio turno | 2.13 % | 6.4 min | S/ 136,414 | S/ 93,435 | **ahorra S/ 109,451** |
+| Caso 1: 1 fijo | 50.54 % | 33.2 min | S/ 4,525,188 | S/ 561,507 | pierde S/ 334,647 |
+| **Caso 2 (hoy): 2 fijos** | **16.71 %** | **21.2 min** | **S/ 1,523,311** | **S/ 226,860** | – |
+| Caso 3: 3 fijos | 3.51 % | 9.9 min | S/ 342,657 | S/ 108,979 | ahorra S/ 117,881 |
+| Caso 4: 4 fijos | 0.66 % | 3.8 min | S/ 58,560 | S/ 97,406 | ahorra S/ 129,454 |
+| Propuesta 1: por horas | 2.01 % | 6.7 min | S/ 189,633 | S/ 88,689 | **ahorra S/ 138,170** |
+| Propuesta 2: medio turno | 2.13 % | 6.4 min | S/ 203,622 | S/ 97,400 | **ahorra S/ 129,460** |

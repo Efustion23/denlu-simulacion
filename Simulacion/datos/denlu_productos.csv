@@ -1,0 +1,49 @@
+id_producto,seccion,producto,precio_S,margen_pct
+0,Arroz y azúcar,"Arroz extra, saco 50 kg",185.0,0.06
+1,Arroz y azúcar,"Arroz superior, bolsa 5 kg",21.5,0.08
+2,Arroz y azúcar,"Azúcar rubia, saco 50 kg",172.0,0.05
+3,Arroz y azúcar,"Azúcar rubia, bolsa 5 kg",19.0,0.07
+4,Arroz y azúcar,"Lenteja, bolsa 1 kg",7.4,0.12
+5,Arroz y azúcar,"Frejol canario, bolsa 1 kg",9.9,0.12
+6,Aceites y conservas,"Aceite vegetal, caja 12 × 1 L",96.0,0.09
+7,Aceites y conservas,"Aceite vegetal, botella 1 L",8.4,0.11
+8,Aceites y conservas,"Atún en lata, caja 48 u",165.0,0.1
+9,Aceites y conservas,"Atún en lata, unidad",5.2,0.13
+10,Aceites y conservas,"Sardina en lata, caja 24 u",62.0,0.11
+11,Aceites y conservas,"Mayonesa, doypack 1 kg",14.5,0.14
+12,Fideos y harinas,"Fideo spaghetti, fardo 20 × 500 g",52.0,0.1
+13,Fideos y harinas,"Fideo canuto, fardo 20 × 500 g",50.0,0.1
+14,Fideos y harinas,"Harina sin preparar, saco 50 kg",150.0,0.07
+15,Fideos y harinas,"Harina preparada, bolsa 1 kg",6.2,0.13
+16,Fideos y harinas,"Avena, bolsa 900 g",6.8,0.14
+17,Fideos y harinas,"Sémola, bolsa 1 kg",5.9,0.13
+18,Lácteos,"Leche evaporada, caja 48 latas",168.0,0.08
+19,Lácteos,"Leche evaporada, lata 400 g",3.7,0.11
+20,Lácteos,"Yogurt bebible, 1 L",7.2,0.16
+21,Lácteos,"Mantequilla, 200 g",7.9,0.15
+22,Lácteos,"Queso fresco, kg",18.0,0.14
+23,Lácteos,"Leche condensada, lata",7.5,0.15
+24,Bebidas,"Gaseosa 3 L, paquete 6 u",46.0,0.14
+25,Bebidas,"Gaseosa 500 ml, paquete 12 u",24.0,0.16
+26,Bebidas,"Agua mineral 2.5 L, paquete 6 u",18.0,0.18
+27,Bebidas,"Cerveza, caja 12 × 620 ml",66.0,0.12
+28,Bebidas,"Rehidratante 500 ml, paquete 12 u",30.0,0.18
+29,Bebidas,"Néctar de fruta, 1 L",4.8,0.2
+30,Detergentes y limpieza,"Detergente en polvo, bolsa 4 kg",38.0,0.18
+31,Detergentes y limpieza,"Detergente en polvo, bolsa 800 g",8.9,0.2
+32,Detergentes y limpieza,"Lejía, galón 4 L",9.5,0.22
+33,Detergentes y limpieza,"Jabón de lavar, paquete 6 barras",13.0,0.21
+34,Detergentes y limpieza,"Lavavajilla en pasta, 1 kg",11.5,0.22
+35,Detergentes y limpieza,"Papel higiénico, paquete 24 rollos",32.0,0.17
+36,Higiene personal,"Champú, 1 L",18.5,0.24
+37,Higiene personal,"Jabón de tocador, paquete 3 u",8.4,0.23
+38,Higiene personal,"Pasta dental, paquete 3 u",12.0,0.22
+39,Higiene personal,"Toallas higiénicas, paquete 10 u",5.5,0.25
+40,Higiene personal,"Pañales, paquete 40 u",42.0,0.18
+41,Higiene personal,"Desodorante, 150 ml",11.0,0.26
+42,Galletas y golosinas,"Galletas de soda, paquete 6 × 6 u",9.8,0.22
+43,Galletas y golosinas,"Galletas dulces, caja 24 u",18.0,0.24
+44,Galletas y golosinas,"Chocolate en barra, caja 24 u",26.0,0.26
+45,Galletas y golosinas,"Caramelos, bolsa 100 u",6.5,0.3
+46,Galletas y golosinas,"Snacks salados, paquete 12 u",14.0,0.28
+47,Galletas y golosinas,"Panetón, caja 6 u",120.0,0.2

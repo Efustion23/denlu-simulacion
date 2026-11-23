@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Andén DENLU</title>
-  <meta name="description" content="Almacén de DENLU (Tarma), 2025: con 2 despachadores ρ > 1 y se forma la cola; modelo M/M/c, programación entera con personal por horas o de medio turno, y simulación en 3D de todo el año por casos.">
+  <meta name="description" content="Almacén de DENLU (Tarma), 2025: con 2 despachadores ρ > 1 y se forma la cola; modelo M/M/c, programación entera con personal por horas o de medio turno, simulación en 3D de todo el año por casos y por secciones, y los productos más pedidos con su margen.">
   <script>document.documentElement.classList.add("js"); try { var t = localStorage.getItem('denlu-tema'); if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; } catch (e) {}</script>
   <link rel="stylesheet" href="estilos.css">
 </head>
@@ -22,7 +22,8 @@
       <a href="#cola"><span class="num">1</span><span class="txt">El problema</span></a>
       <a href="#modelo"><span class="num">2</span><span class="txt">El modelo</span></a>
       <a href="#simulacion"><span class="num">3</span><span class="txt">Simulación</span></a>
-      <a href="#resultados"><span class="num">4</span><span class="txt">Resultados</span></a>
+      <a href="#productos"><span class="num">4</span><span class="txt">Productos</span></a>
+      <a href="#resultados"><span class="num">5</span><span class="txt">Resultados</span></a>
     </nav>
     <button type="button" class="tema" id="tema" aria-pressed="false" aria-label="Tema oscuro" title="Cambiar entre tema claro y oscuro">
           <svg class="luna" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
@@ -125,7 +126,7 @@
         <h2 id="tSim"><span class="num">3</span>Simulación por casos: todo 2025</h2>
         <span class="estado" id="estadoDia" aria-live="polite"></span>
       </div>
-      <p class="nota-bloque">Los mismos 12,070 pedidos de 2025, con el personal del caso que elijas. Mira cómo se forma la cola en el almacén y cuánto se pierde o se gana.</p>
+      <p class="nota-bloque">Los mismos 12,070 pedidos de 2025, con el personal del caso que elijas. El almacén está dividido en <strong>8 secciones</strong>: cada despachador camina a las secciones de los productos de su pedido, y la sección más pedida está más cerca de empaque. Mira cómo se forma la cola y cuánto se pierde o se gana.</p>
       <div class="horas casos-chips" id="casosSim" role="group" aria-label="Caso a simular"></div>
       <div class="caso" id="tarjetaCaso" aria-live="polite"></div>
       <div class="selector-plan">
@@ -170,6 +171,14 @@
       </div>
       <div class="lienzo"><div class="escena3d" id="escena3d" hidden></div><canvas id="lienzo" role="img" aria-label="Plano del almacén: ventas, tablero de pedidos, estantería, mesas de empaque, comedor y andén con los camiones de cada ruta"></canvas></div>
       <dl class="contadores" id="contadores"></dl>
+      <div class="cab-secciones">
+        <h3 class="sub" id="tituloSecciones">Productos por sección</h3>
+        <div class="segmentado" id="vistaSecciones" role="group" aria-label="Periodo del conteo">
+          <button type="button" data-sec="hoy" aria-pressed="true">Hoy</button>
+          <button type="button" data-sec="anio">Año</button>
+        </div>
+      </div>
+      <div class="tabla-ancha"><table class="resultados secciones" id="tablaSecciones"></table></div>
       <h3 class="sub" id="tituloAnio">Acumulado del año</h3>
       <dl class="contadores" id="contadoresAnio"></dl>
       <div class="grafico grafico-medio"><canvas id="gAnio" aria-label="Ganancia perdida acumulada en 2025 con el caso elegido y con hoy"></canvas></div>
@@ -183,6 +192,7 @@
             <li><span class="sw sw-hoja sw-cancelo"></span><span>Cancelado: esperó más de <strong id="leyendaT">60</strong> min</span></li>
             <li><span class="sw sw-desp"></span><span>Despachador (D1, D2…) con chaleco</span></li>
             <li><span class="sw sw-acopio"></span><span>Acopio: se hace la lista y se revisan los productos</span></li>
+            <li><span class="sw-sec" style="background:#d4a82f"></span><span>Secciones del almacén con su número: la 1 es la más pedida y está más cerca de empaque</span></li>
             <li><span class="sw sw-caja"></span><span>Caja del pedido: se alista y se sube al camión</span></li>
             <li><span class="sw sw-ocio"></span><span>“zz”: despachador pagado sin pedidos</span></li>
           </ul>
@@ -191,9 +201,27 @@
       </details>
     </section>
 
+    <section class="bloque paso-seccion revelar" id="productos" aria-labelledby="tProd">
+      <div class="bloque-cab">
+        <h2 id="tProd"><span class="num">4</span>Productos: qué se pide más y cuánto se gana</h2>
+        <span class="estado">48 productos · 8 secciones</span>
+      </div>
+      <p class="nota-bloque">El detalle de los pedidos de 2025: cuántas veces se pidió cada producto, sus unidades, su margen y su ganancia. Cuanto más se pide una sección, más recorridos tiene; por eso las más pedidas van más cerca de empaque (la 1 es la más cercana).</p>
+      <dl class="kpis" id="kpisProductos" aria-label="Productos: resultados principales"></dl>
+      <div class="grafico grafico-alto"><canvas id="gTop" aria-label="Los productos más pedidos"></canvas></div>
+      <div class="tabla-ancha"><table class="resultados" id="tablaPorSeccion"></table></div>
+      <details class="mas">
+        <summary>Ver más: los 48 productos con su margen y su clase ABC</summary>
+        <div class="mas-cuerpo">
+          <p class="nota-bloque">Ordenados por las veces que se pidieron. Clasificación ABC por valor vendido: clase A, los productos que suman el 80 % de la venta; B, el siguiente 15 %; C, el resto. Los de clase A son los que nunca deben faltar.</p>
+          <div class="tabla-ancha"><table class="resultados" id="tablaProductos"></table></div>
+        </div>
+      </details>
+    </section>
+
     <section class="bloque paso-seccion revelar" id="resultados" aria-labelledby="tRes">
       <div class="bloque-cab">
-        <h2 id="tRes"><span class="num">4</span>Resultados: cuánto se ahorra</h2>
+        <h2 id="tRes"><span class="num">5</span>Resultados: cuánto se ahorra</h2>
         <span class="estado">Costo total = planilla + ganancia perdida</span>
       </div>
       <div class="recomendacion" id="recomendacion"></div>

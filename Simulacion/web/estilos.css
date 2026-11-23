@@ -729,3 +729,15 @@ details.mas[open] > summary { border-bottom: 1px solid var(--linea); }
   #simulacion .selector-plan label { flex-wrap: wrap; }
   #simulacion .selector-plan select { width: 100%; }
 }
+
+/* ---------- Secciones del almacén y productos ---------- */
+.sw-sec { display: inline-block; width: 11px; height: 11px; margin-right: 7px; border-radius: 3px; vertical-align: -1px; }
+.leyenda .sw-sec { flex: none; margin-right: 0; }
+.cab-secciones { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 16px; margin-top: 18px; }
+.cab-secciones .sub { margin: 0; }
+.resultados.secciones td:first-child { white-space: nowrap; }
+.barra-sec { display: inline-block; width: 70px; height: 8px; margin-right: 8px; border-radius: 4px; background: var(--panel); vertical-align: middle; overflow: hidden; }
+.barra-sec i { display: block; height: 100%; border-radius: 4px; transition: width 300ms var(--curva); }
+.resultados td.rojo { color: var(--rojo); font-weight: 600; }
+#kpisProductos { margin-bottom: 16px; }
+@media (max-width: 700px) { .barra-sec { display: none; } }

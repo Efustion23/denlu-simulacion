@@ -10,7 +10,31 @@ const LAMBDA = DATOS.lambda;
 const AVISO_CAMION = 45;                         // a los 45 min de espera la hoja se marca: está por perder el camión
 const WQ_MAX = 15;
 const CASOS = Object.fromEntries(DATOS.casos.map((c) => [c.id, c]));
-const DIAS = DATOS.dias.map(([fecha, campana, o]) => ({ fecha, campana, o, n: o.length / 3 }));
+const DIAS = DATOS.dias.map(([fecha, campana, o, l]) => ({ fecha, campana, o, l, n: o.length / 4 }));
+// Secciones del almacén, de la más visitada a la menos (así están ubicadas: la primera, más cerca de empaque)
+const SECCIONES = DATOS.secciones.map((x, i) => ({ ...x, i, color: ['#d4a82f', '#3d9b7a', '#4a72b0', '#7fb2d6', '#c77a2c', '#b5524a', '#8c6239', '#a173b5'][i] }));
+const CATALOGO = DATOS.productos;
+// Productos de cada pedido: por línea, un carácter con el producto y otro con la cantidad (base 36)
+const CHARS = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
+function lineasDia(d) {
+  if (!d.dec) d.dec = d.l.split('|').map((x) => { const r = []; for (let i = 0; i < x.length; i += 2) r.push([CHARS.indexOf(x[i]), parseInt(x[i + 1], 36)]); return r; });
+  return d.dec;
+}
+// Suma por sección (y por producto) lo despachado y lo perdido de un día; `cancel[i]` = 1 si el pedido i se canceló
+function contarDia(d, cancel, acum = nuevoConteo()) {
+  lineasDia(d).forEach((lineas, i) => sumarPedido(acum, lineas, !cancel[i]));
+  return acum;
+}
+const nuevoConteo = () => ({ sec: SECCIONES.map(() => ({ rec: 0, uni: 0, venta: 0, gan: 0, perd: 0, recPerd: 0 })), prod: CATALOGO.map(() => 0) });
+function sumarPedido(acum, lineas, despachado) {
+  const vistas = new Set();
+  for (const [k, q] of lineas) {
+    const p = CATALOGO[k], s = acum.sec[p.seccion];
+    vistas.add(p.seccion);
+    if (despachado) { s.uni += q; s.venta += q * p.precio; s.gan += q * p.precio * p.margen; acum.prod[k] += q; } else s.perd += q;
+  }
+  vistas.forEach((i) => { if (despachado) acum.sec[i].rec++; else acum.sec[i].recPerd++; });
+}
 const PROMEDIO_DIA = DIAS.reduce((s, d) => s + d.n, 0) / DIAS.length;
 
 // M/M/c en régimen estacionario: λ y μ en pedidos/hora; tiempos en minutos. Si ρ >= 1 no hay estado estable.
@@ -41,20 +65,21 @@ const deTurno = (horas, t) => (t >= CIERRE ? horas.includes(17) : horas.includes
 
 const ORDEN = { fin: 0, sale: 1, turno: 2, cancela: 3, perdio: 4, llegada: 5, inicio: 6 };
 
-// Un día: `o` = [llegada (min), servicio (min), monto (S/), ...]; `turnos` = horas de cada persona.
+// Un día: `o` = [llegada (min), servicio (min), monto (S/), ganancia (S/), ...]; `turnos` = horas de cada persona.
 function simularDia(o, turnos, conLog = false) {
   const libre = turnos.map(() => 0);
-  const r = { pedidos: o.length / 3, cancelados: 0, esperaTotal: 0, venta: 0, ventaPerdida: 0, log: conLog ? [] : null };
+  const r = { pedidos: o.length / 4, cancelados: 0, esperaTotal: 0, venta: 0, ventaPerdida: 0, margen: 0, margenPerdido: 0,
+    cancel: new Uint8Array(o.length / 4), log: conLog ? [] : null };
   const ev = (t, tipo, datos) => r.log.push({ t, tipo, ...datos });
-  for (let i = 0, id = 0; i < o.length; i += 3, id++) {
-    const a = o[i], s = o[i + 1], m = o[i + 2];
+  for (let i = 0, id = 0; i < o.length; i += 4, id++) {
+    const a = o[i], s = o[i + 1], m = o[i + 2], g = o[i + 3];
     let mejor = Infinity, k = -1;
     turnos.forEach((h, j) => { const t = enTurno(h, Math.max(a, libre[j])); if (t < mejor) { mejor = t; k = j; } });
-    r.venta += m;
+    r.venta += m; r.margen += g;
     if (conLog) ev(a, 'llegada', { id, monto: m });
     if (mejor - a > TOL) {
-      r.cancelados++; r.ventaPerdida += m;
-      if (conLog) { ev(a + AVISO_CAMION, 'perdio', { id }); ev(a + TOL, 'cancela', { id, monto: m }); }
+      r.cancelados++; r.ventaPerdida += m; r.margenPerdido += g; r.cancel[id] = 1;
+      if (conLog) { ev(a + AVISO_CAMION, 'perdio', { id }); ev(a + TOL, 'cancela', { id, monto: m, margen: g }); }
     } else {
       libre[k] = mejor + s;
       r.esperaTotal += mejor - a;
@@ -82,16 +107,16 @@ const turnosDe = (caso) => CASOS[caso].turnos.map(([, h]) => h);
 // Todo el año con el personal de un caso: un resultado por día, más los totales
 function simularAnio(caso) {
   const turnos = turnosDe(caso);
-  const dias = DIAS.map((d) => { const r = simularDia(d.o, turnos); return { fecha: d.fecha, pedidos: r.pedidos, cancelados: r.cancelados, esperaTotal: r.esperaTotal, ventaPerdida: r.ventaPerdida }; });
-  const t = dias.reduce((s, d) => ({ pedidos: s.pedidos + d.pedidos, cancelados: s.cancelados + d.cancelados, esperaTotal: s.esperaTotal + d.esperaTotal, ventaPerdida: s.ventaPerdida + d.ventaPerdida }),
-    { pedidos: 0, cancelados: 0, esperaTotal: 0, ventaPerdida: 0 });
+  const dias = DIAS.map((d) => { const r = simularDia(d.o, turnos); return { fecha: d.fecha, pedidos: r.pedidos, cancelados: r.cancelados, esperaTotal: r.esperaTotal,
+    ventaPerdida: r.ventaPerdida, margenPerdido: r.margenPerdido, cancel: r.cancel }; });
+  const t = { pedidos: 0, cancelados: 0, esperaTotal: 0, ventaPerdida: 0, margenPerdido: 0 };
+  dias.forEach((d) => Object.keys(t).forEach((k) => { t[k] += d[k]; }));
   const costoMes = CASOS[caso].costoMes;
-  return { dias, ...t, pct: (100 * t.cancelados) / t.pedidos, espera: t.esperaTotal / (t.pedidos - t.cancelados),
-    margenPerdido: MARGEN * t.ventaPerdida, costoMes, total: 12 * costoMes + MARGEN * t.ventaPerdida };
+  return { dias, ...t, pct: (100 * t.cancelados) / t.pedidos, espera: t.esperaTotal / (t.pedidos - t.cancelados), costoMes, total: 12 * costoMes + t.margenPerdido };
 }
 
 const Simulacion = {
   P: P_, HORAS, CIERRE, MU_H, MU_MIN, TOL, MARGEN, LAMBDA, AVISO_CAMION, WQ_MAX, CASOS, DIAS, PROMEDIO_DIA, D: DATOS.D,
-  mmc, crearRng, enTurno, deTurno, simularDia, simularAnio, turnosDe,
+  SECCIONES, CATALOGO, mmc, crearRng, enTurno, deTurno, simularDia, simularAnio, turnosDe, lineasDia, contarDia, nuevoConteo, sumarPedido,
 };
 if (typeof module !== 'undefined') module.exports = Simulacion;

@@ -312,20 +312,29 @@ const Vista3D = (() => {
       }
       [0.12, 0.8, 1.48].forEach((h) => {
         escena.add(caja(e.w / M, 0.04, prof, mRepisa, X(e.x + e.w / 2), h, zc));
-        for (let x = e.x + 6; x < e.x + e.w - 12; x += 13) cajas.push([X(x + 5), h, zc]);
+        for (let x = e.x + 6; x < e.x + e.w - 12; x += 13) cajas.push([X(x + 5), h, zc, x, y]);
       });
     });
     const rp = S.crearRng(31), inst = new THREE.InstancedMesh(new THREE.BoxGeometry(0.26, 0.4, 0.4), new THREE.MeshLambertMaterial(), cajas.length);
     const mtx = new THREE.Matrix4(), col = new THREE.Color();
     let n = 0;
-    cajas.forEach(([x, h, z]) => {
+    // Cada caja toma el color de la sección del almacén donde está (la 1, la más pedida, abajo a la izquierda)
+    const zonas = S.SECCIONES.map((sec, i) => ({ ...zonaSeccion(i, A), color: sec.color }));
+    const colorEn = (px, fy) => { const z = zonas.find((q) => q.y === fy && px >= q.x && px < q.x + q.w); return z ? z.color : PRODUCTOS[0]; };
+    cajas.forEach(([x, h, z, px, fy]) => {
       if (rp() < 0.12) return;                              // hueco en la repisa
       const alto = 0.18 + rp() * 0.3;
       mtx.compose(new THREE.Vector3(x, h + 0.02 + alto / 2, z), new THREE.Quaternion(), new THREE.Vector3(1, alto / 0.4, 1));
-      inst.setMatrixAt(n, mtx); inst.setColorAt(n, col.set(PRODUCTOS[Math.floor(rp() * PRODUCTOS.length)])); n++;
+      inst.setMatrixAt(n, mtx); inst.setColorAt(n, col.set(colorEn(px, fy)).offsetHSL(0, 0, (rp() - 0.5) * 0.12)); n++;
     });
     inst.count = n; inst.castShadow = true; inst.receiveShadow = true;
     escena.add(inst);
+    // Letrero de cada sección sobre su estante, con su número de cercanía a empaque
+    zonas.forEach((z, i) => {
+      const letrero = spriteTexto(`${i + 1} · ${S.SECCIONES[i].nombre}`, { fondo: z.color, tam: 34 }, 0.34);
+      letrero.position.set(X(z.x + z.w / 2), 2.45, Z(z.y + e.alto / 2));
+      escena.add(letrero);
+    });
     // Tres productos que saltan del estante a los brazos (uno por persona que recoge)
     for (let i = 0; i < 18; i++) { const m = caja(0.18, 0.18, 0.18, mat(PRODUCTOS[i % PRODUCTOS.length])); m.visible = false; recogida3.push(m); escena.add(m); }
 
@@ -556,7 +565,7 @@ const Vista3D = (() => {
       g.position.set(X(per.vx), 0, Z(per.vy));
       g.rotation.y = -(per.angVis + (libre ? 0.4 * Math.sin(dia.t * 0.2 + k * 1.7) : 0));
       const accion = tramo && ['recoger', 'empacar', 'revisar'].includes(tramo.tipo) ? tramo.tipo : null;
-      const colores = tr ? [0, 1, 2].map((i) => PRODUCTOS[(tr.id + i) % PRODUCTOS.length]) : null;
+      const colores = tr ? [0, 1, 2].map((i) => colorTrabajo(tr, i)) : null;
       posar(g, { camina: per.camina, paso: per.paso, carga: per.carga, colores, accion, sentado, come: sentado, t: sentado ? dia.t * 0.7 + k : dia.t * 1.4 });
       ponerTexto(g.userData.etiqueta, `D${k + 1}`, { fondo: per.activo || tr ? '#2d5c88' : '#5b5f5c', tam: 36 });
       g.userData.etiqueta.visible = !sentado;
@@ -572,7 +581,7 @@ const Vista3D = (() => {
           m.visible = g2 > 0;
           if (g2 >= 1) m.position.copy(m0).add(new THREE.Vector3(0, i * 0.19, 0));
           else if (g2 > 0) { const q = suave(g2); m.position.lerpVectors(s0, m0, q); m.position.y += Math.sin(q * Math.PI) * 0.35; }
-          m.material = mat(PRODUCTOS[(tr.id + i) % PRODUCTOS.length]);
+          m.material = mat(tramo.color || colorTrabajo(tr, i));
         }
       }
     });
@@ -646,7 +655,7 @@ const Vista3D = (() => {
       p.carga.forEach((m, i) => {
         m.visible = f !== null;
         if (f === null) return;
-        m.material = mat(PRODUCTOS[(per.trabajo.id + i) % PRODUCTOS.length]);
+        m.material = mat(colorTrabajo(per.trabajo, i));
         // Del brazo al palé con un saltito, uno detrás de otro
         const q = suave(Math.min(1, Math.max(0, (f - i * 0.04) / 0.12))), base = new THREE.Vector3((i - 1) * 0.32, 0.3, 0);
         const mano = p.g.worldToLocal(new THREE.Vector3(X(per.vx + Math.cos(per.angVis) * 14), 1.05, Z(per.vy + Math.sin(per.angVis) * 14)));
