@@ -24,6 +24,20 @@ Dos propuestas mantienen a los 2 fijos y suman gente solo en las horas pico. Las
 
 **Recomendación:** adoptar la Propuesta 2 como plan formal y usar personal por horas solo como refuerzo en las campañas de julio y diciembre.
 
+### Calidad de servicio
+
+La meta de calidad es que, en cada hora, como máximo el **10 % de los pedidos espere más de 30 min**. Se mide con P(W<sub>q</sub> > t) = P<sub>w</sub> · e<sup>−(cμ−λ)t</sup>.
+
+| Caso | Entregados a tiempo | Horas que cumplen la meta | Costo total al año |
+|---|---|---|---|
+| Hoy: 2 fijos | 83.3 % | 0 de 10 | S/ 226,860 |
+| Propuesta 1: por horas | 98.0 % | 2 de 10 | S/ 88,689 |
+| Propuesta 2: medio turno | 97.9 % | 4 de 10 | S/ 97,400 |
+| Alta calidad, por horas (2 fijos + 9 por horas) | 99.7 % | 10 de 10 | S/ 85,645 |
+| Alta calidad, medio turno (2 fijos + 5 de medio turno) | 99.6 % | 10 de 10 | S/ 96,622 |
+
+Los planes de alta calidad salen del MILP con la meta como restricción R8. No caben en el presupuesto de S/ 2,500 al mes: necesitan S/ 3,042 (por horas) o S/ 3,867 (medio turno). Aun así bajan el costo total, porque casi no se cancela ningún pedido.
+
 ### Productos y secciones del almacén
 
 El almacén tiene **8 secciones** y 48 productos. Para alistar un pedido, el despachador camina a cada sección donde están sus productos; en promedio recorre 5 secciones por pedido. Por eso las secciones más pedidas van más cerca de empaque:
@@ -46,7 +60,7 @@ El almacén tiene **8 secciones** y 48 productos. Para alistar un pedido, el des
 
 | Ruta | Qué es |
 |---|---|
-| [`Simulacion/Denlu.ipynb`](Simulacion/Denlu.ipynb) | El informe, sección por sección: planteamiento, ρ > 1 y cómo se forma la cola, M/M/c, costo de la cola, demanda por producto y sección (productos más pedidos, veces pedido, margen y clasificación ABC), costos laborales 2025 (sueldo mínimo S/ 1,130), función objetivo y MILP de las 2 propuestas, simulación de todo 2025 por casos (1, 2, 3 y 4 fijos y las 2 propuestas), días críticos, métricas L, W, L<sub>q</sub>, W<sub>q</sub>, bondad de ajuste, ROI y conclusiones. |
+| [`Simulacion/Denlu.ipynb`](Simulacion/Denlu.ipynb) | El informe, sección por sección: planteamiento, ρ > 1 y cómo se forma la cola, M/M/c, costo de la cola, demanda por producto y sección (productos más pedidos, veces pedido, margen y clasificación ABC), restricciones del MILP explicadas una por una (R1 a R8), calidad de servicio con semáforo y propuesta de alta calidad, costos laborales 2025 (sueldo mínimo S/ 1,130), función objetivo y MILP de las 2 propuestas, simulación de todo 2025 por casos (1, 2, 3 y 4 fijos y las 2 propuestas), días críticos, métricas L, W, L<sub>q</sub>, W<sub>q</sub>, bondad de ajuste, ROI y conclusiones. |
 | [`Simulacion/datos/`](Simulacion/datos/) | La base de datos **simulada** de 2025: <ul><li>`denlu_2025.csv`: los 12,070 pedidos.</li><li>`denlu_2025_detalle.csv`: los productos de cada pedido, con sección, cantidad, subtotal y margen.</li><li>`denlu_productos.csv`: el catálogo de 48 productos en 8 secciones.</li><li>`denlu_2025.xlsx`: todo lo anterior, más los productos más pedidos, el resumen por sección, por hora y por mes, los días críticos y un diccionario de columnas.</li></ul> |
 | [`Simulacion/PLAN_SIMULACION.md`](Simulacion/PLAN_SIMULACION.md) | El plan de ejecución de la simulación 3D: qué muestra, las reglas, los parámetros, los archivos, cómo funciona por dentro y cómo actualizarla. |
 | [`Simulacion/web/`](Simulacion/web/) | La página, en 5 pasos (ver abajo). Funciona sin internet: Chart.js, Three.js y la tipografía Barlow van incluidos. |
@@ -68,6 +82,7 @@ El almacén tiene **8 secciones** y 48 productos. Para alistar un pedido, el des
    - Se elige una de tres con un botón: **solo personal fijo** (1, 2 = hoy, 3 o 4 fijos), **medio turno** (Propuesta 2) o **por horas** (Propuesta 1).
    - Cada simulación muestra a cada persona real (D1, D2…): si es fija, de medio turno o por horas, su horario, sus horas al día y su costo al mes. También explica por qué el caso ahorra o pierde al año.
    - Una franja del día muestra cuántas personas trabajan en cada hora y de qué tipo, con un contador en vivo de las que trabajan ahora y el ρ de ese momento.
+   - Semáforo de calidad: en cada hora, el % de pedidos que esperan más de 30 min (verde si cumple la meta del 10 %), y en cuántas horas se cumple la meta.
    - Se puede simular todo 2025 día por día, uno de los 10 días más críticos o cualquier fecha.
    - Velocidades de 1 s = 2, 5, 10, 30 o 60 min, o 1 s = 1 día. Un botón da el año completo al instante.
    - El almacén en 3D o en plano 2D, dividido en 8 secciones: cada despachador camina a las secciones de su pedido.

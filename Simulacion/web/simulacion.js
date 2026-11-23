@@ -48,6 +48,12 @@ function mmc(l, c, mu = MU_H) {
   return { estable: true, rho: r, P0: p0, Pw: pw, Lq: lq, Wq: wq * 60, W: wq * 60 + 60 / mu, L: lq + a };
 }
 
+// Calidad de servicio: P(Wq > t), probabilidad de que un pedido espere más de t minutos (1 si rho >= 1)
+function pEsperaMas(l, c, t = DATOS.calidad.t) {
+  const m = mmc(l, c);
+  return m.estable ? m.Pw * Math.exp(-((c * MU_H - l) * t) / 60) : 1;
+}
+
 // Generador pseudoaleatorio con semilla (para detalles de la animación: estantes, colores)
 function crearRng(semilla) {
   let s = semilla >>> 0 || 1;
@@ -117,6 +123,6 @@ function simularAnio(caso) {
 
 const Simulacion = {
   P: P_, HORAS, CIERRE, MU_H, MU_MIN, TOL, MARGEN, LAMBDA, AVISO_CAMION, WQ_MAX, CASOS, DIAS, PROMEDIO_DIA, D: DATOS.D,
-  SECCIONES, CATALOGO, mmc, crearRng, enTurno, deTurno, simularDia, simularAnio, turnosDe, lineasDia, contarDia, nuevoConteo, sumarPedido,
+  SECCIONES, CATALOGO, CALIDAD: DATOS.calidad, pEsperaMas, mmc, crearRng, enTurno, deTurno, simularDia, simularAnio, turnosDe, lineasDia, contarDia, nuevoConteo, sumarPedido,
 };
 if (typeof module !== 'undefined') module.exports = Simulacion;

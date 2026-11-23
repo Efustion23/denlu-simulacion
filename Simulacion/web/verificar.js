@@ -51,6 +51,17 @@ S.CATALOGO.forEach((p, k) => igual(`unidades de ${p.nombre}`, todo.prod[k], p.un
 S.SECCIONES.forEach((x, i) => igual(`pedidos que visitan ${x.nombre}`, todo.sec[i].rec, x.visitas, 0));
 for (let i = 1; i < S.SECCIONES.length; i++) igual('secciones ordenadas por demanda', S.SECCIONES[i].visitas <= S.SECCIONES[i - 1].visitas ? 1 : 0, 1, 0);
 
+// Calidad: horas que cumplen la meta (como en la sección 6.2 del notebook) y planes de alta calidad que la cumplen siempre
+const cumple = (cob) => cob.filter((c, i) => S.pEsperaMas(S.LAMBDA[i], c) <= S.CALIDAD.meta).length;
+igual('calidad hoy', cumple(S.CASOS.c2.cobertura), 0, 0);
+igual('calidad 4 fijos', cumple(S.CASOS.c4.cobertura), 9, 0);
+igual('calidad propuesta 1', cumple(S.CASOS.p1.cobertura), 2, 0);
+igual('calidad propuesta 2', cumple(S.CASOS.p2.cobertura), 4, 0);
+for (const k of ['ac1', 'ac2']) {
+  const cob = S.HORAS.map((h) => Object.entries(S.CALIDAD[k].plan).reduce((a, [t, n]) => a + (h >= Number(t.slice(-5, -3)) && h < Number(t.slice(-2)) ? n : 0), 0));
+  igual(`${k} cumple la meta en las 10 horas`, cumple(cob), 10, 0);
+}
+
 // M/M/c: con 2 despachadores hay horas con ρ >= 1 y con las propuestas todas quedan con ρ < 1
 igual('horas con ρ ≥ 1 hoy', S.LAMBDA.filter((l) => !S.mmc(l, 2).estable).length, 6, 0);
 for (const id of ['p1', 'p2']) igual(`${id} ρ < 1`, S.LAMBDA.every((l, i) => S.mmc(l, S.CASOS[id].cobertura[i]).rho <= 0.85) ? 1 : 0, 1, 0);

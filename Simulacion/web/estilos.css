@@ -764,7 +764,7 @@ details.mas[open] > summary { border-bottom: 1px solid var(--linea); }
 .equipo-ahora .mal { color: var(--rojo); font-weight: 600; }
 .franja { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 4px; }
 .franja-hora { display: grid; grid-template-rows: auto 1fr auto; gap: 4px; padding: 6px 3px; border-radius: 8px; background: var(--panel); text-align: center; transition: box-shadow 200ms var(--curva), background-color 200ms var(--curva); }
-.franja-hora.ahora { background: var(--hoja); box-shadow: 0 0 0 2px var(--tinta); }
+.franja-hora.actual { background: var(--hoja); box-shadow: 0 0 0 2px var(--tinta); }
 .franja-hora .fh { color: var(--tinta-2); font-size: 12px; }
 .franja-hora .fp { display: flex; flex-direction: column-reverse; align-items: center; justify-content: flex-start; gap: 3px; min-height: 92px; }
 .franja-hora .fp i { display: block; width: 100%; max-width: 46px; padding: 2px 0; border-radius: 5px; color: #fff; font-size: 10px; font-style: normal; font-weight: 600; }
@@ -781,3 +781,15 @@ details.mas[open] > summary { border-bottom: 1px solid var(--linea); }
   .franja-hora .fp i { font-size: 8px; }
   .franja-hora .fh { font-size: 10px; }
 }
+
+/* ---------- Semáforo de calidad de servicio ---------- */
+.q { display: inline-block; padding: 1px 8px; border-radius: 999px; color: #fff; font-size: 12px; font-weight: 600; }
+.q.verde, .fq.verde { background: #27ae60; }
+.q.amarillo, .fq.amarillo { background: #d4a20b; }
+.q.rojo, .fq.rojo { background: var(--rojo); }
+.franja-hora { grid-template-rows: auto 1fr auto auto; }
+.franja-hora .fq { display: block; margin: 0 2px; padding: 1px 0; border-radius: 5px; color: #fff; font-size: 11px; font-weight: 600; }
+.calidad-caso { margin: 2px 0 8px; font-size: 14px; line-height: 1.55; }
+.calidad-caso .q { margin-right: 6px; }
+.leyenda-tipos .q { margin-left: 4px; }
+@media (max-width: 700px) { .franja-hora .fq { font-size: 9px; margin: 0; } }

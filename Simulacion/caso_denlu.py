@@ -193,3 +193,21 @@ def optimizar(D, opciones, fijos=None, lambdas=LAMBDA_BASE):
     plan = dict(fijos)
     plan.update({t: int(round(v.solution_value())) for t, v in x.items() if v.solution_value() > 0.5})
     return plan
+
+
+# ---------------------------------------------------------------- Calidad de servicio
+def p_espera_mas(lam, c, t=30, mu=MU_H):
+    """P(Wq > t) en M/M/c: probabilidad de que un pedido espere más de t minutos. Si rho >= 1, es 1."""
+    m = mmc(lam, c, mu)
+    return 1.0 if m['rho'] >= 1 else m['Pw'] * math.exp(-(c * mu - lam) * t / 60)
+
+
+def requeridos_calidad(lambdas, mu=MU_H, t=30, meta=0.10):
+    """Personas mínimas por hora para que como máximo `meta` de los pedidos espere más de t minutos."""
+    req = []
+    for lam in lambdas:
+        c = 1
+        while p_espera_mas(lam, c, t, mu) > meta:
+            c += 1
+        req.append(c)
+    return req
