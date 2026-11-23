@@ -1,11 +1,11 @@
 // Demostración interactiva: una cola M/M/c en vivo para la hora y la cantidad de despachadores elegidas.
 // Los pedidos llegan como un proceso de Poisson con la λ real de esa hora (Denlu.ipynb) y cada despachador tarda
-// un tiempo exponencial de media 44.5 min. Al lado, los valores teóricos de largo plazo (M/M/c).
+// un tiempo exponencial de media 29.75 min (alistar + subir al camión). Al lado, los valores teóricos de largo plazo (M/M/c).
 const DemoCola = (() => {
   const lienzo = $('demoLienzo'), g = lienzo.getContext('2d');
   const MIN_POR_SEG = 4;                                     // 1 s real = 4 min simulados
   const VENTANA = 180;                                       // minutos que muestra la curva de la cola
-  let hora = N.rho.indexOf(Math.max(...N.rho)), c = 3, corriendo = false, visible = false, ultimo = null;
+  let hora = N.rho.indexOf(Math.max(...N.rho)), c = 2, corriendo = false, visible = false, ultimo = null;
   let sim, rng, semilla = 1, ancho = 0, alto = 0;
 
   const exp = (media) => -Math.log(1 - rng()) * media;

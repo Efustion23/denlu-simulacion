@@ -1,22 +1,25 @@
-// Interfaz: las cifras de Denlu.ipynb paso a paso (la cola, diagnóstico, despachadores por hora, plan MILP, métricas
-// y ROI) con la evidencia del CSV de 2025, y una animación ilustrativa de un día en el almacén.
+// Interfaz del caso DENLU 2025: el problema (ρ > 1 con 2 despachadores), el modelo de minimización (MILP con
+// personal por horas o medio turno), la simulación de todo el año por casos en el almacén 2D/3D y los resultados.
+// Todas las cifras salen de datos2025.js (exportado de Denlu.ipynb) y de simulacion.js (las mismas reglas).
 const S = Simulacion;
 const $ = (id) => document.getElementById(id);
-
-// La animación muestra la situación actual o uno de los planes; T y p son los supuestos del modelo de simulación
-const estado = { plan: { ...S.PLANES.milp.plan }, preset: 'milp', crec: 0, aus: 0, T: S.T_CAL, p: S.P_CAL, hx: S.COSTO_HORA_EXTRA };
-const totalPersonas = (plan) => Object.values(plan).reduce((a, b) => a + b, 0);
+const R = DATOS.resultados;
+const IDS = Object.keys(S.CASOS);
+// La animación usa `estado`: T = minutos de espera que llenan la barra de la hoja; crec = pedidos del día frente al promedio (%)
+const estado = { T: S.TOL, crec: 0 };
 const reducirMovimiento = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 const numero = (v, dec = 0) => v.toLocaleString('es-PE', { minimumFractionDigits: dec, maximumFractionDigits: dec });
 const soles = (v, dec = 0) => 'S/ ' + numero(v, dec);
 const minutos = (v) => (Number.isFinite(v) ? `${numero(v, 1)} min` : '∞');
-const minutos2 = (v) => (Number.isFinite(v) ? `${numero(v, 2)} min` : '∞');   // como en las tablas del notebook
 const reloj = (min) => {
   const m = Math.floor(min) + 8 * 60;
   return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
 };
 const horaTexto = (h) => `${String(h).padStart(2, '0')}:00`;
+const SEMANA = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
+const MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+const fechaTexto = (f) => { const d = new Date(f + 'T12:00:00'); return `${SEMANA[d.getDay()]} ${d.getDate()} ${MESES[d.getMonth()]}`; };
 
 let C = {};
 function leerColores() {
@@ -25,7 +28,7 @@ function leerColores() {
     'acero', 'rojo', 'verde', 'serie-plan', 'serie-actual', 'control']) C[k] = cs.getPropertyValue('--' + k).trim();
 }
 
-// Cuenta un número desde 0 (o desde donde estaba) hasta su valor, con salida rápida y llegada suave
+// Cuenta un número desde donde estaba hasta su valor, con salida rápida y llegada suave
 function contar(el, valor, formato, ms = 1100) {
   const desde = Number(el.dataset.valor || 0);
   el.dataset.valor = valor;
@@ -45,7 +48,7 @@ const raiz = document.documentElement;
 const sistemaOscuro = matchMedia('(prefers-color-scheme: dark)');
 const esOscuro = () => (raiz.dataset.theme ? raiz.dataset.theme === 'dark' : sistemaOscuro.matches);
 function pintarBotonTema() { $('tema').setAttribute('aria-pressed', esOscuro()); }
-function cambioTema() { leerColores(); crearGraficos(); pintarBotonTema(); pintarCausas(); }
+function cambioTema() { leerColores(); crearGraficos(); pintarBotonTema(); }
 $('tema').addEventListener('click', () => {
   raiz.dataset.theme = esOscuro() ? 'light' : 'dark';
   try { localStorage.setItem('denlu-tema', raiz.dataset.theme); } catch (e) { /* sin almacenamiento: no se recuerda */ }
@@ -53,494 +56,247 @@ $('tema').addEventListener('click', () => {
 });
 sistemaOscuro.addEventListener('change', cambioTema);
 
-/* ---------- Datos de cada escenario ---------- */
+/* ---------- Datos de los casos ---------- */
 
-const N = S.NOTEBOOK, D = S.CSV;
-const CAPACIDAD = 3 * S.MU_H;                              // pedidos por hora que atienden los 3 despachadores de hoy
-const requerido = S.requeridos(N.rhoObjetivo);
-const requeridoEspera = S.requeridosConEspera(N.rhoObjetivo, S.WQ_MAX);
-const ESCENARIOS = {
-  actual: { nombre: 'Hoy: 3 fijos', corto: 'Hoy (3)', c: S.HORAS.map(() => 3) },
-  diciembre: { nombre: 'Diciembre: 4', corto: 'Diciembre (4)', c: S.HORAS.map(() => 4) },
-  requerido: { nombre: 'Requerido D_h', corto: 'Requerido Dₕ', c: requerido },
-  milp: { nombre: 'Plan MILP', corto: 'Plan MILP', c: S.personalPorHora(S.PLANES.milp.plan), plan: S.PLANES.milp.plan },
-  alternativo: { nombre: `Plan espera ≤ ${S.WQ_MAX} min`, corto: `Espera ≤ ${S.WQ_MAX}`, c: S.personalPorHora(S.PLANES.alternativo.plan), plan: S.PLANES.alternativo.plan },
-  recomendado: { nombre: 'Plan recomendado (ρ < 1)', corto: 'Recomendado', c: S.personalPorHora(S.PLANES.recomendado.plan), plan: S.PLANES.recomendado.plan },
+const RHO_HOY = S.LAMBDA.map((l) => l / (2 * S.MU_H));
+const N = { rho: RHO_HOY, rhoObjetivo: S.P.RHO_MAX };          // cola.js marca en rojo las horas con ρ > 0.85
+const COSTO_HORA = S.P.C_FT / (8 * S.P.DIAS_MES);               // costo de una hora pagada de un despachador (S/)
+const ANUAL = Object.fromEntries(IDS.map((id) => [id, S.simularAnio(id)]));   // resultado de cada día, para el modo año
+const rhoCaso = (id) => S.LAMBDA.map((l, i) => l / (S.CASOS[id].cobertura[i] * S.MU_H));
+const COLOR_CASO = () => ({ c1: C['serie-actual'], c2: C.rojo, c3: C['serie-actual'], c4: C['serie-actual'], p1: C['serie-plan'], p2: C.verde });
+const DESC = {
+  c1: 'Un solo despachador de 08:00 a 18:00: casi todo el día llegan más pedidos de los que puede despachar.',
+  c2: 'La situación actual: 2 despachadores fijos de 08:00 a 18:00 (8 h + 2 h extra diarias).',
+  c3: 'Se contrata un tercer fijo con el mismo horario de 08:00 a 18:00.',
+  c4: 'Cuatro fijos de 08:00 a 18:00: casi no hay cola, pero se paga gente todo el día aunque solo hace falta en los picos.',
+  p1: 'Los 2 fijos + personal <strong>por horas</strong> solo en los picos (bloques de 2 h). Es la más barata, pero la menos realista: alta rotación y riesgo laboral.',
+  p2: 'Los 2 fijos + personal de <strong>medio turno</strong> (4 h con beneficios). Es la opción formal y realista.',
 };
-const O = S.OPTIMIZACION;
-const COSTO_HORA = S.C_FT / (8 * (S.DIAS / 12));           // costo de una hora pagada de un despachador (S/)
-const metricas = (c) => c.map((ci, i) => S.mmc(S.LAMBDA[i], ci));
-const R = S.roi();
-const RC = S.roi(S.PLANES.milp.plan, S.VENTA_POR_ESPERA);
+const nombreTurno = (t) => t.replace('Fijo 08-18', 'Fijo 08–18').replace(/(\d\d)-(\d\d)/, '$1–$2');
+const chipsCaso = (id) => Object.entries(S.CASOS[id].plan)
+  .map(([t, n]) => `<span class="chip ${t.startsWith('Por') ? 'ph' : t.startsWith('Medio') ? 'mt' : 'diez'}">${n} × ${nombreTurno(t)}</span>`).join('');
+const hoyR = R.c2, mejor = R.p1.total < R.p2.total ? 'p1' : 'p2';
 
 /* ---------- Portada ---------- */
 
 function pintarPortada() {
-  const pico = D.esperaronPct.indexOf(Math.max(...D.esperaronPct));
+  const criticas = RHO_HOY.filter((r) => r >= 1).length, pico = RHO_HOY.indexOf(Math.max(...RHO_HOY));
+  $('hallazgo').innerHTML = `Con 2 despachadores fijos, en <strong>${criticas} de las 10 horas</strong> llegan más pedidos de los que pueden despachar (ρ &gt; 1): la cola crece sin límite y en 2025 se cancelaron el <strong>${numero(hoyR.pct, 1)} %</strong> de los pedidos. Dos propuestas lo resuelven: personal <strong>por horas</strong> (la más barata) o de <strong>medio turno</strong> (la realista).`;
   const kpis = [
-    ['Pedidos que esperaron en cola', (100 * D.esperaron) / D.preparados, (v) => `${numero(v, 1)} %`,
-      `${numero(D.esperaron)} de ${numero(D.preparados)} en 2025; a las ${horaTexto(S.HORAS[pico])}, el ${numero(D.esperaronPct[pico], 0)} %`, true],
-    ['Cola más larga del año', Math.max(...D.colaMax), (v) => `${numero(v, 0)} pedidos`, `el ${D.peorDia.fecha}`],
-    ['Planilla del plan MILP al mes', N.costoMilp, (v) => soles(v, 2), `hoy ${soles(S.costoMensual(S.PLANES.actual.plan), 2)} con 3 fijos`],
-    ['ROI según el notebook', N.roi.roi, (v) => `${numero(v, 2)} %`, `${numero(RC.roi, 2)} % si solo cuenta la venta ligada a la espera`],
+    [`ρ a las ${horaTexto(S.HORAS[pico])} con 2 personas`, RHO_HOY[pico], (v) => numero(v, 2), 'mayor que 1: la cola no se vacía', true],
+    ['Pedidos cancelados en 2025', hoyR.pct, (v) => `${numero(v, 1)} %`, `${numero(hoyR.cancelados)} de ${numero(S.P.pedidos)} · ${soles(hoyR.ventaPerdida)} de venta perdida`],
+    ['Propuesta 1 (por horas) ahorra', R.p1.ahorro, (v) => soles(v), `al año · cancelados ${numero(R.p1.pct, 1)} %`],
+    ['Propuesta 2 (medio turno) ahorra', R.p2.ahorro, (v) => soles(v), `al año · cancelados ${numero(R.p2.pct, 1)} %`],
   ];
   $('kpis').innerHTML = kpis.map(([et, , , pie, lider]) =>
     `<div class="${lider ? 'lider' : ''}"><dt>${et}</dt><dd>0</dd><span class="pie">${pie}</span></div>`).join('');
   $('kpis').querySelectorAll('dd').forEach((dd, i) => contar(dd, kpis[i][1], kpis[i][2], 1400));
 }
 
-/* ---------- 1. La cola: evidencia del CSV ---------- */
+/* ---------- 1. El problema ---------- */
 
-function pintarEvidencia() {
+function pintarProblema() {
+  const criticas = RHO_HOY.filter((r) => r >= 1).length;
+  $('estadoCola').textContent = `2 despachadores · μ = ${numero(S.MU_H, 2)} pedidos/h cada uno`;
+  const peor = DATOS.diag.espera.indexOf(Math.max(...DATOS.diag.espera));
   const datos = [
-    [`${numero((100 * D.esperaron) / D.preparados, 0)} %`, `de los pedidos preparados tuvo que esperar (${numero(D.esperaron)} de ${numero(D.preparados)})`],
-    [`${D.diasCola3} de ${S.DIAS}`, 'días tuvieron 3 o más pedidos en cola al mismo tiempo'],
-    [`${Math.max(...D.colaMax)}`, `pedidos en cola a la vez en el peor momento (${D.peorDia.fecha})`],
-    [`${D.rutaConEspera} de ${D.rutaPerdidas}`, 'pedidos que perdieron su ruta habían esperado en cola'],
+    [`${criticas} de 10`, 'horas con ρ ≥ 1: llegan más pedidos de los que 2 personas pueden despachar'],
+    [`${numero(hoyR.pct, 1)} %`, `de los pedidos se canceló por esperar más de ${S.TOL} min (${numero(hoyR.cancelados)} de ${numero(S.P.pedidos)})`],
+    [soles(hoyR.ventaPerdida), `de venta perdida en 2025: ${soles(hoyR.margenPerdido)} de ganancia (margen ${numero(100 * S.MARGEN, 0)} %)`],
+    [minutos(DATOS.diag.espera[peor]), `de espera media a las ${horaTexto(S.HORAS[peor])}; ${numero(Math.max(...DATOS.cola5), 1)} pedidos en cola en promedio en el peor momento`],
   ];
   $('evidencia').innerHTML = datos.map(([v, t]) => `<div><dt>${v}</dt><dd>${t}</dd></div>`).join('');
-  $('tablaCola').innerHTML = `
-    <thead><tr><th>Hora</th><th>λ</th><th>ρ (3)</th><th>P(esperar)</th><th>W<sub>q</sub> teórico</th><th>Espera media real</th><th>Esperaron</th><th>P90 real</th><th>Cola máx.</th></tr></thead>
+  $('tablaDiag').innerHTML = `
+    <thead><tr><th>Hora</th><th>λ (ped/h)</th><th>ρ con 2</th><th>Estado</th><th>Espera media</th><th>Cancelados</th><th>Venta perdida</th><th>ρ con 3</th><th>ρ con 4</th></tr></thead>
     <tbody>${S.HORAS.map((h, i) => {
-      const m = S.mmc(S.LAMBDA[i], 3);
-      return `<tr class="${m.rho > N.rhoObjetivo ? 'critica' : ''}"><td>${horaTexto(h)}</td><td class="cifra">${S.LAMBDA[i].toFixed(3)}</td>
-        <td class="cifra">${m.rho.toFixed(3)}</td><td class="cifra">${numero(100 * m.Pw, 1)} %</td><td class="cifra">${minutos2(m.Wq)}</td>
-        <td class="cifra">${minutos(S.HIST_ESPERA[i])}</td><td class="cifra">${numero(D.esperaronPct[i], 1)} %</td>
-        <td class="cifra">${minutos(D.p90[i])}</td><td class="cifra">${D.colaMax[i]}</td></tr>`;
+      const r = RHO_HOY[i];
+      return `<tr class="${r >= 1 ? 'critica' : ''}"><td>${horaTexto(h)}</td><td class="cifra">${S.LAMBDA[i].toFixed(3)}</td><td class="cifra">${r.toFixed(3)}</td>
+        <td>${r >= 1 ? 'crece sin límite' : 'estable'}</td><td class="cifra">${minutos(DATOS.diag.espera[i])}</td><td class="cifra">${numero(DATOS.diag.cancelPct[i], 1)} %</td>
+        <td class="cifra">${soles(DATOS.diag.ventaPerdida[i])}</td><td class="cifra">${(S.LAMBDA[i] / (3 * S.MU_H)).toFixed(3)}</td><td class="cifra">${(S.LAMBDA[i] / (4 * S.MU_H)).toFixed(3)}</td></tr>`;
     }).join('')}</tbody>`;
 }
-let vistaCola = 'prom';
-$('vistaCola').addEventListener('click', (e) => {
-  const k = e.target.dataset.cola;
-  if (!k) return;
-  vistaCola = k;
-  document.querySelectorAll('#vistaCola button').forEach((b) => b.setAttribute('aria-pressed', b.dataset.cola === k));
-  if (graficos.colaReal) CREAR.colaReal();
-});
 
-/* ---------- 2. Diagnóstico: explorador por hora ---------- */
+/* ---------- 2. El modelo ---------- */
 
-let horaElegida = N.rho.indexOf(Math.max(...N.rho));       // arranca en la hora más saturada
-$('horas').innerHTML = S.HORAS.map((h, i) =>
-  `<button type="button" role="tab" data-i="${i}" class="${N.rho[i] > N.rhoObjetivo ? 'critica' : ''}">${h}h</button>`).join('');
-$('horas').addEventListener('click', (e) => {
-  if (e.target.dataset.i === undefined) return;
-  detenerRecorrido();
-  elegirHora(Number(e.target.dataset.i));
-});
-
-// Medidor de 0 a 1.2: el arco se llena según ρ y la aguja gira de -90° (0) a +90° (1.2)
-const ARCO = 251.33, RHO_MAX = 1.2;
-const anguloRho = (r) => -90 + (180 * Math.min(r, RHO_MAX)) / RHO_MAX;
-(() => {
-  const a = ((anguloRho(N.rhoObjetivo) - 90) * Math.PI) / 180, m = $('marca085');
-  m.setAttribute('x1', 100 + 66 * Math.cos(a)); m.setAttribute('y1', 100 + 66 * Math.sin(a));
-  m.setAttribute('x2', 100 + 94 * Math.cos(a)); m.setAttribute('y2', 100 + 94 * Math.sin(a));
-})();
-
-function elegirHora(i) {
-  horaElegida = i;
-  document.querySelectorAll('#horas button').forEach((b) => b.setAttribute('aria-selected', Number(b.dataset.i) === i));
-  const lambda = S.LAMBDA[i], rho = N.rho[i], escala = 5;
-  const llegan = $('barraLlegan');
-  llegan.style.width = `${(100 * lambda) / escala}%`;
-  llegan.classList.toggle('excede', rho > N.rhoObjetivo);
-  $('barraCap').style.width = `${(100 * CAPACIDAD) / escala}%`;
-  contar($('vLlegan'), lambda, (v) => `${numero(v, 2)} ped/h`, 700);
-  $('vCap').textContent = `${numero(CAPACIDAD, 2)} ped/h`;
-  contar($('vEspera'), S.HIST_ESPERA[i], (v) => `${numero(v, 1)} min`, 700);
-  contar($('vPerdida'), S.HIST_PERDIDA[i], (v) => `${numero(v, 1)} %`, 700);
-  contar($('vEsperaron'), D.esperaronPct[i], (v) => `${numero(v, 0)} %`, 700);
-  contar($('vRho'), rho, (v) => numero(v, 3), 700);
-  const arco = $('arcoRho');
-  arco.style.strokeDashoffset = ARCO * (1 - Math.min(rho, RHO_MAX) / RHO_MAX);
-  arco.style.stroke = rho >= 1 ? C.rojo : rho > N.rhoObjetivo ? C.seguridad : C.acero;
-  $('aguja').style.transform = `rotate(${anguloRho(rho)}deg)`;
-  const v = $('veredicto'), h = horaTexto(S.HORAS[i]);
-  v.classList.toggle('mal', rho > N.rhoObjetivo);
-  v.textContent = rho > N.rhoObjetivo
-    ? `A las ${h} los 3 despachadores están ocupados el ${numero(100 * rho, 0)} % del tiempo: pasa el límite de 0.85 y la cola crece. Esperó el ${numero(D.esperaronPct[i], 0)} % de los pedidos, ${numero(S.HIST_ESPERA[i], 1)} min en promedio.`
-    : rho > 0.6
-      ? `A las ${h} hay margen (ocupados el ${numero(100 * rho, 0)} % del tiempo), pero cuando llegan varios pedidos juntos igual se forma cola: esperó el ${numero(D.esperaronPct[i], 0)} %.`
-      : `A las ${h} sobra capacidad: los despachadores están ocupados el ${numero(100 * rho, 0)} % del tiempo y casi nadie espera.`;
-  if (graficos.rho) {
-    graficos.rho.data.datasets[0].borderWidth = S.HORAS.map((_, k) => (k === i ? 3 : 0));
-    graficos.rho.update('none');
-  }
-}
-
-let recorrido = null;
-function detenerRecorrido() {
-  clearInterval(recorrido); recorrido = null;
-  $('recorrer').textContent = '▶ Recorrer el día hora por hora';
-}
-$('recorrer').addEventListener('click', () => {
-  if (recorrido) { detenerRecorrido(); return; }
-  let i = 0;
-  elegirHora(i);
-  $('recorrer').textContent = '⏸ Detener el recorrido';
-  recorrido = setInterval(() => { if (++i >= S.HORAS.length) detenerRecorrido(); else elegirHora(i); }, 1600);
-});
-
-/* ---------- 3. Despachadores por hora: comparación y simulador ---------- */
-
-let horario = [...ESCENARIOS.actual.c], escenarioActivo = 'actual';
-const claseEspera = (m) => (!m.estable || m.Wq > 30 ? 'mal' : m.Wq > S.WQ_MAX ? 'medio' : 'ok');
-$('escenarios').innerHTML = Object.entries(ESCENARIOS).map(([k, e]) => `<button type="button" data-e="${k}">${e.nombre.replace('D_h', 'Dₕ')}</button>`).join('');
-$('escenarios').addEventListener('click', (e) => {
-  const k = e.target.dataset.e;
-  if (!k) return;
-  escenarioActivo = k;
-  horario = [...ESCENARIOS[k].c];
-  pintarHorario(true);
-});
-$('horario').addEventListener('click', (e) => {
-  const b = e.target.closest('button[data-d]');
-  if (!b) return;
-  const i = Number(b.dataset.i);
-  horario[i] = Math.max(1, Math.min(8, horario[i] + Number(b.dataset.d)));
-  escenarioActivo = null;
-  pintarHorario(false, i);
-});
-function pintarHorario(todo, cambiada = -1) {
-  document.querySelectorAll('#escenarios button').forEach((b) => b.setAttribute('aria-pressed', b.dataset.e === escenarioActivo));
-  const m = metricas(horario);
-  if (todo || !$('horario').children.length) {
-    $('horario').innerHTML = S.HORAS.map((h, i) => `
-      <div class="hora-celda" data-i="${i}">
-        <span class="hh">${h}h</span>
-        <div class="paso"><button type="button" data-i="${i}" data-d="-1" aria-label="Un despachador menos a las ${h}h">−</button>
-          <strong class="nc"></strong>
-          <button type="button" data-i="${i}" data-d="1" aria-label="Un despachador más a las ${h}h">+</button></div>
-        <span class="r"></span><span class="w"></span>
-      </div>`).join('');
-  }
-  $('horario').querySelectorAll('.hora-celda').forEach((celda, i) => {
-    celda.className = `hora-celda ${claseEspera(m[i])}${i === cambiada ? ' pulso' : ''}`;
-    celda.querySelector('.nc').textContent = horario[i];
-    celda.querySelector('.r').textContent = `ρ ${m[i].estable ? numero(m[i].rho, 2) : '≥ 1'}`;
-    celda.querySelector('.w').textContent = m[i].estable ? `Wq ${numero(m[i].Wq, 1)}` : 'Wq ∞';
-  });
-  const lam = S.LAMBDA.reduce((a, b) => a + b, 0);
-  const wqProm = m.every((x) => x.estable) ? m.reduce((s, x, i) => s + x.Wq * S.LAMBDA[i], 0) / lam : Infinity;
-  const peor = m.reduce((k, x, i) => (x.Wq > m[k].Wq ? i : k), 0);
-  const resumen = [
-    ['Personas-hora al día', horario.reduce((a, b) => a + b, 0), (v) => numero(v, 0)],
-    ['Espera media del día', wqProm, (v) => (Number.isFinite(v) ? `${numero(v, 1)} min` : '∞')],
-    ['Horas sobre ρ = 0.85', m.filter((x) => x.rho > N.rhoObjetivo).length, (v) => numero(v, 0)],
-    ['Hora más crítica', S.HORAS[peor], (v) => `${Math.round(v)}h · ${minutos(m[peor].Wq)}`],
+function pintarModelo() {
+  const p = S.P, bloque = p.TARIFA_HORA * 2 * p.DIAS_MES;
+  $('formulacion').innerHTML = `
+    <div class="f-bloque"><p class="sub">Propuesta 1 · personal por horas</p>
+      <p class="f">Min Z<sub>1</sub> = 2 × ${numero(p.C_FIJO, 2)} + ${numero(bloque, 0)} · Σ B<sub>s</sub></p>
+      <p>B<sub>s</sub> = personas por horas en el bloque de 2 h que empieza a las s h (s = 8 … 16). ${numero(bloque, 0)} = S/ ${numero(p.TARIFA_HORA, 2)} × 2 h × ${p.DIAS_MES} días.</p></div>
+    <div class="f-bloque alt"><p class="sub">Propuesta 2 · medio turno</p>
+      <p class="f">Min Z<sub>2</sub> = 2 × ${numero(p.C_FIJO, 2)} + ${numero(p.C_MT, 2)} · Σ M<sub>s</sub></p>
+      <p>M<sub>s</sub> = personas de medio turno (4 h continuas) que empiezan a las s h (s = 8 … 14), con beneficios proporcionales.</p></div>
+    <div class="f-bloque"><p class="sub">Sujeto a, en cada hora h</p>
+      <p class="f">2 + (personas que cubren h) ≥ D<sub>h</sub> = ⌈ λ<sub>h</sub> / (0.85 · μ) ⌉ · B<sub>s</sub>, M<sub>s</sub> enteros ≥ 0</p>
+      <p>Requerido: ${S.D.map((d, i) => `${S.HORAS[i]}h → ${d}`).join(' · ')}</p></div>`;
+  const col = (t) => `<td class="cifra">${t}</td>`;
+  const filas = [
+    ['Sueldo', 1130, 1130, 565, `S/ ${numero(p.TARIFA_HORA, 2)} por hora`],
+    ['EsSalud (9 %)', 101.7, 101.7, 50.85, '–'],
+    ['Gratificación (2 al año)', 188.33, 188.33, 94.17, '–'],
+    ['Bonificación extraordinaria (9 %)', 16.95, 16.95, 8.47, '–'],
+    ['CTS', 109.86, 109.86, 54.93, '–'],
+    ['2 h extra diarias (+25 %)', 0, p.C_EXTRA_2H, 0, '–'],
   ];
-  $('resumenHorario').innerHTML = resumen.map(([dt, , f]) => `<div><dt>${dt}</dt><dd></dd></div>`).join('');
-  $('resumenHorario').querySelectorAll('dd').forEach((dd, i) => {
-    const [, v, f] = resumen[i];
-    if (Number.isFinite(v)) contar(dd, v, f, 400); else dd.textContent = f(v);
-  });
+  $('tablaCostos').innerHTML = `<thead><tr><th>Costo mensual (sueldo mínimo S/ ${numero(p.RMV, 0)})</th><th>Fijo 8 h</th><th>Fijo 08–18 (hoy)</th><th>Medio turno 4 h</th><th>Por horas</th></tr></thead>
+    <tbody>${filas.map(([et, a, b, c, d]) => `<tr><td>${et}</td>${col(a ? numero(a, 2) : '–')}${col(b ? numero(b, 2) : '–')}${col(c ? numero(c, 2) : '–')}${col(d)}</tr>`).join('')}
+    <tr class="total"><td>Total al mes</td>${col(soles(p.C_FT, 2))}${col(soles(p.C_FIJO, 2))}${col(soles(p.C_MT, 2))}${col(`${soles(bloque, 2)} por bloque de 2 h`)}</tr></tbody>`;
+  const m = (l, c) => S.mmc(l, c);
+  $('tablaCobertura').innerHTML = `<thead><tr><th>Hora</th><th>λ</th><th>D<sub>h</sub></th><th>Hoy: c / ρ</th><th>Propuesta 1: c / ρ / W<sub>q</sub></th><th>Propuesta 2: c / ρ / W<sub>q</sub></th></tr></thead>
+    <tbody>${S.HORAS.map((h, i) => {
+      const l = S.LAMBDA[i], a = S.CASOS.p1.cobertura[i], b = S.CASOS.p2.cobertura[i];
+      return `<tr class="${RHO_HOY[i] >= 1 ? 'critica' : ''}"><td>${horaTexto(h)}</td><td class="cifra">${l.toFixed(3)}</td><td class="cifra">${S.D[i]}</td>
+        <td class="cifra">2 / ${RHO_HOY[i].toFixed(2)}</td><td class="cifra">${a} / ${m(l, a).rho.toFixed(2)} / ${minutos(m(l, a).Wq)}</td><td class="cifra">${b} / ${m(l, b).rho.toFixed(2)} / ${minutos(m(l, b).Wq)}</td></tr>`;
+    }).join('')}</tbody>`;
 }
 
-/* ---------- 4. Plan: formulación y horario por persona ---------- */
-
-const VARIABLES = [['X₁', 'FT-1', 'Full-time 08–17, almuerzo 12–13'], ['X₂', 'FT-2', 'Full-time 08–17, almuerzo 13–14'],
-  ['X₃', 'FT-3', 'Full-time 09–18, almuerzo 14–15'], ['Y₁', 'PT-1', 'Part-time 09–13'], ['Y₂', 'PT-2', 'Part-time 10–14'], ['Y₃', 'PT-3', 'Part-time 14–18']];
-function pintarVariables(vista) {
-  const plan = S.PLANES[vista === 'actual' ? 'milp' : vista].plan;
-  $('turnosLista').innerHTML = VARIABLES.map(([v, t, d]) =>
-    `<li><span class="var">${v}</span><span>${d}</span><strong>${plan[t] || 0}</strong></li>`).join('');
-}
-function personas(plan) {
-  return Object.entries(plan).flatMap(([t, n]) => Array.from({ length: n }, () => t));
-}
-let vistaPlan = 'milp';
-function pintarGantt(vista) {
-  vistaPlan = vista;
-  document.querySelectorAll('#vistaGantt button').forEach((b) => b.setAttribute('aria-pressed', b.dataset.vista === vista));
-  const plan = S.PLANES[vista].plan, enTurno = S.personalPorHora(plan), minimo = minimoDe(vista);
+function pintarGantt(id) {
+  document.querySelectorAll('#vistaGantt button').forEach((b) => b.setAttribute('aria-pressed', b.dataset.vista === id));
+  const caso = S.CASOS[id];
   let k = 0;
-  const filas = personas(plan).map((t) => {
-    const horas = S.TURNOS[t].horas, primera = Math.min(...horas), ultima = Math.max(...horas);
-    const diez = horas.length === 10, ph = S.TURNOS[t].porHoras;
+  const filas = caso.turnos.map(([t, horas], j) => {
+    const fijo = t.startsWith('Fijo'), ph = t.startsWith('Por'), mt = t.startsWith('Medio');
     const celdas = S.HORAS.map((h) => {
-      let clase = horas.includes(h) ? 'on' : h > primera && h < ultima ? 'alm' : '';
-      if (clase === 'on' && diez && h >= 16) clase += ' extra';          // jornada de 10 h: las 2 últimas son horas extra
-      if (clase === 'on' && ph) clase += ' ph';
-      return `<i class="celda ${clase}" style="--i:${k++}" title="${clase === 'alm' ? 'Almuerzo' : clase.includes('extra') ? 'Hora extra' : ''}"></i>`;
+      let clase = horas.includes(h) ? 'on' : '';
+      if (clase && fijo && h >= 16) clase += ' extra';
+      if (clase && ph) clase += ' ph';
+      if (clase && mt) clase += ' mt';
+      return `<i class="celda ${clase}" style="--i:${k++}" title="${clase.includes('extra') ? 'Hora extra' : ''}"></i>`;
     }).join('');
-    return `<div class="persona"><strong>${t}</strong><span>${S.TURNOS[t].horario.replace(' (situación actual)', '')}</span></div>${celdas}`;
+    return `<div class="persona"><strong>D${j + 1}</strong><span>${nombreTurno(t)}</span></div>${celdas}`;
   }).join('');
   $('gantt').innerHTML = `<span></span>${S.HORAS.map((h) => `<span class="cab">${h}h</span>`).join('')}${filas}
     <i class="sep"></i>
-    <span class="fila-et">${vista === 'alternativo' ? 'Mínimo (Wq ≤ 15)' : vista === 'recomendado' ? 'Mínimo (ρ < 1)' : 'Mínimo requerido'}</span>${minimo.map((n, i) => `<span class="n req" style="--i:${i}">${n}</span>`).join('')}
-    <span class="fila-et">En turno</span>${enTurno.map((n, i) => `<span class="n ${n >= minimo[i] ? 'ok' : 'falta'}" style="--i:${i}" title="${n >= minimo[i] ? 'Cubre el mínimo' : `Faltan ${minimo[i] - n}`}">${n}</span>`).join('')}`;
-  pintarVariables(vista);
-  const total = totalPersonas(plan), pt = Object.entries(plan).reduce((s, [t, n]) => s + (S.TURNOS[t].parcial ? n : 0), 0);
-  const lista = Object.entries(plan).map(([t, n]) => `<strong>${n} ${t}</strong> (${S.TURNOS[t].horario.replace(' (situación actual)', '')})`).join(', ');
-  const costo = soles(S.costoMensual(plan), 2), hoy = soles(S.costoMensual(S.PLANES.actual.plan), 2);
-  $('planMilp').innerHTML = vista === 'actual'
-    ? `Hoy: ${lista}. Cuesta ${costo} al mes, pero de 9 a 11 h y a las 15 h pasa el límite ρ = 0.85 (ver la fila "En turno").`
-    : vista === 'milp'
-      ? `${lista}: ${total} despachadores por <strong>${costo}</strong> al mes, frente a ${hoy} de hoy. Cubre el mínimo de cada hora y respeta el tope de part-time (${pt} de ${total}, ${Math.round((100 * pt) / total)} % ≤ 40 %). El modelo tiene otra solución con el mismo costo (1 FT-1, 1 FT-2, 1 FT-3, 1 PT-1 y 1 PT-3); SCIP eligió esta.`
-      : vista === 'recomendado'
-        ? `Sección 6 del notebook: ${lista}. Planilla de <strong>${costo}</strong> al mes; con las horas extra después de las 18:00, ${soles(O.filas[0].total, 2)} frente a ${soles(O.totalHoy, 2)} de hoy. Cumple ρ &lt; 1 en todas las horas y, en la simulación, espera y pierde rutas como hoy. Las celdas rayadas son horas extra; las verdes claras, personal por horas.`
-        : `Propuesta adicional (no está en el notebook): el mismo MILP pidiendo además W<sub>q</sub> ≤ ${S.WQ_MAX} min en cada hora. ${lista}: ${total} despachadores por <strong>${costo}</strong> al mes (${soles(S.costoMensual(plan) - N.costoMilp, 2)} más que el plan MILP). Nadie espera en promedio más de 6.1 min en ninguna hora.`;
+    <span class="fila-et">Requerido D<sub>h</sub></span>${S.D.map((n, i) => `<span class="n req" style="--i:${i}">${n}</span>`).join('')}
+    <span class="fila-et">En turno</span>${caso.cobertura.map((n, i) => `<span class="n ${n >= S.D[i] ? 'ok' : 'falta'}" style="--i:${i}" title="${n >= S.D[i] ? 'Cubre el requerido' : `Faltan ${S.D[i] - n}`}">${n}</span>`).join('')}`;
+  const r = R[id], extra = caso.costoMes - S.CASOS.c2.costoMes;
+  $('planTexto').innerHTML = id === 'c2'
+    ? `Hoy: 2 fijos por <strong>${soles(caso.costoMes, 2)}</strong> al mes. En ${S.D.filter((d) => d > 2).length} de las 10 horas faltan personas (en rojo): ahí ρ &gt; 0.85 y en 6 horas incluso ρ ≥ 1.`
+    : `Solución óptima del MILP: ${chipsCaso(id)} Planilla de <strong>${soles(caso.costoMes, 2)}</strong> al mes (${soles(extra, 2)} más que hoy). Cubre el requerido en todas las horas: ρ máximo ${numero(Math.max(...rhoCaso(id)), 2)}. En la simulación de 2025 las cancelaciones bajan de ${numero(hoyR.pct, 1)} % a <strong>${numero(r.pct, 1)} %</strong>.`;
   if (graficos.cobertura) CREAR.cobertura();
-  pintarTablaCobertura();
 }
-$('vistaGantt').addEventListener('click', (e) => { if (e.target.dataset.vista) pintarGantt(e.target.dataset.vista); });
-function minimoDe(vista) { return vista === 'alternativo' ? requeridoEspera : vista === 'recomendado' ? O.minimosRho1 : requerido; }
-function pintarTablaCobertura() {
-  const asignado = S.personalPorHora(S.PLANES[vistaPlan].plan), minimo = minimoDe(vistaPlan);
-  $('tablaCobertura').innerHTML = `
-    <thead><tr><th>Hora</th><th>Mín. requerido</th><th>Asignado</th><th>Diferencia</th></tr></thead>
-    <tbody>${S.HORAS.map((h, i) => `<tr><td>${horaTexto(h)}</td><td class="cifra">${minimo[i]}</td>
-      <td class="cifra">${asignado[i]}</td><td class="cifra">${asignado[i] - minimo[i] > 0 ? '+' : ''}${asignado[i] - minimo[i]}</td></tr>`).join('')}</tbody>`;
+$('vistaGantt').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) pintarGantt(b.dataset.vista); });
+
+/* ---------- 3. Simulación por casos ---------- */
+
+// modo 'anio': recorre 2025 día por día y acumula; modo 'dia': un solo día (los críticos o una fecha)
+const sim = { caso: 'c2', modo: 'anio', diaIdx: 0, acum: null, serie: [] };
+const CRITICOS = DATOS.criticos.map((c) => ({ ...c, idx: S.DIAS.findIndex((d) => d.fecha === c.fecha) }));
+// Ganancia perdida acumulada de hoy (2 fijos) día a día, para comparar
+const HOY_ACUM = ANUAL.c2.dias.reduce((a, d) => { a.push((a.length ? a[a.length - 1] : 0) + S.MARGEN * d.ventaPerdida); return a; }, []);
+const planillaDias = (id, n) => (12 * S.CASOS[id].costoMes * n) / S.DIAS.length;
+
+$('casosSim').innerHTML = IDS.map((id) => `<button type="button" data-caso="${id}" class="${R[id].pct > 10 ? 'critica' : ''}">${S.CASOS[id].corto}</button>`).join('');
+$('casosSim').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) elegirCasoSim(b.dataset.caso); });
+$('diaSel').innerHTML = `<option value="anio">Todo 2025, día por día</option>
+  <optgroup label="Días más críticos (más pedidos)">${CRITICOS.map((c) => `<option value="${c.idx}">${fechaTexto(c.fecha)} · ${c.pedidos} pedidos${c.campana ? ' · ' + c.campana : ''}</option>`).join('')}</optgroup>`;
+
+function pintarTarjeta() {
+  const id = sim.caso, r = R[id], rho = rhoCaso(id), rmax = Math.max(...rho), h = rho.indexOf(rmax);
+  const kpis = [
+    ['Planilla al mes', r.costoMes, (v) => soles(v, 2), `${S.CASOS[id].turnos.length} persona${S.CASOS[id].turnos.length > 1 ? 's' : ''}`],
+    ['ρ en la hora más cargada', rmax, (v) => numero(v, 2), rmax >= 1 ? `<span class="mal">${horaTexto(S.HORAS[h])}: ≥ 1, la cola crece sin límite</span>` : `${horaTexto(S.HORAS[h])}: &lt; 1, la cola es estable`],
+    ['Pedidos cancelados en 2025', r.pct, (v) => `${numero(v, 1)} %`, `${numero(r.cancelados)} · ${soles(r.ventaPerdida)} de venta perdida`],
+    [id === 'c2' ? 'Costo total al año' : r.ahorro >= 0 ? 'Ahorro frente a hoy' : 'Pérdida frente a hoy', id === 'c2' ? r.total : Math.abs(r.ahorro), (v) => soles(v),
+      id === 'c2' ? 'planilla + ganancia perdida' : `al año · costo total ${soles(r.total)}`, true],
+  ];
+  $('tarjetaCaso').innerHTML = `<p class="caso-desc"><strong>${S.CASOS[id].nombre}.</strong> ${DESC[id]}</p>
+    <div class="plan-chips">${chipsCaso(id)}</div>
+    <dl class="kpis kpis-caso">${kpis.map(([et, , , pie, lider]) => `<div class="${lider ? 'lider' : ''}"><dt>${et}</dt><dd>0</dd><span class="pie">${pie}</span></div>`).join('')}</dl>`;
+  $('tarjetaCaso').querySelectorAll('dd').forEach((dd, k) => contar(dd, kpis[k][1], kpis[k][2], 600));
 }
 
-/* ---------- 5. Métricas de colas ---------- */
-
-let pestana = 'lw', planMet = 'milp';
-$('planMetricas').innerHTML = ['actual', 'milp', 'alternativo', 'recomendado'].map((k) => `<button type="button" data-m="${k}">${ESCENARIOS[k].nombre}</button>`).join('');
-$('planMetricas').addEventListener('click', (e) => { if (e.target.dataset.m) { planMet = e.target.dataset.m; pintarMetrica(); } });
-$('pestanas').addEventListener('click', (e) => {
-  const b = e.target.closest('button[data-p]');
-  if (b) { pestana = b.dataset.p; pintarMetrica(); }
-});
-function poisson(k, l) { let p = Math.exp(-l); for (let i = 1; i <= k; i++) p *= l / i; return p; }
-function pintarMetrica() {
-  document.querySelectorAll('#pestanas button').forEach((b) => b.setAttribute('aria-selected', b.dataset.p === pestana));
-  document.querySelectorAll('#planMetricas button').forEach((b) => b.setAttribute('aria-pressed', b.dataset.m === planMet));
-  $('planMetricas').hidden = pestana === 'llegadas' || pestana === 'ajuste';
-  const c = ESCENARIOS[planMet].c, m = metricas(c);
-  if (pestana === 'lw') {
-    $('notaMetrica').innerHTML = `Con λ y c de cada hora: L = pedidos en el sistema, W = tiempo total (espera + preparación), L<sub>q</sub> = pedidos en cola y W<sub>q</sub> = espera en cola. ${planMet === 'milp' ? 'Son las celdas 13 y 17 del notebook.' : ''}`;
-    $('tablaMetrica').innerHTML = `<thead><tr><th>Hora</th><th>c</th><th>λ</th><th>ρ</th><th>L</th><th>W</th><th>L<sub>q</sub></th><th>W<sub>q</sub></th></tr></thead>
-      <tbody>${S.HORAS.map((h, i) => `<tr class="${claseEspera(m[i]) === 'mal' ? 'critica' : ''}"><td>${horaTexto(h)}</td><td class="cifra">${c[i]}</td><td class="cifra">${S.LAMBDA[i].toFixed(3)}</td>
-        <td class="cifra">${m[i].rho.toFixed(3)}</td><td class="cifra">${m[i].L.toFixed(3)}</td><td class="cifra">${minutos2(m[i].W)}</td>
-        <td class="cifra">${m[i].Lq.toFixed(3)}</td><td class="cifra">${minutos2(m[i].Wq)}</td></tr>`).join('')}</tbody>`;
-  } else if (pestana === 'llegadas') {
-    $('notaMetrica').innerHTML = `Tiempo promedio entre un pedido y el siguiente (60 / λ). Con llegadas de Poisson, ese tiempo es exponencial. Promedio del día: <strong>${numero(N.entreLlegadas, 2)} min</strong> (celda 19).`;
-    $('tablaMetrica').innerHTML = `<thead><tr><th>Hora</th><th>λ (pedidos/h)</th><th>Tiempo entre llegadas</th></tr></thead>
-      <tbody>${S.HORAS.map((h, i) => `<tr><td>${horaTexto(h)}</td><td class="cifra">${S.LAMBDA[i].toFixed(3)}</td><td class="cifra">${numero(60 / S.LAMBDA[i], 2)} min</td></tr>`).join('')}</tbody>`;
-  } else if (pestana === 'ajuste') {
-    const n = D.frecuencias.reduce((a, b) => a + b, 0), p = N.poisson;
-    $('notaMetrica').innerHTML = `Pedidos por hora en cada día y hora con al menos un pedido (${numero(n)} horas, celda 23). Media <strong>${p.media}</strong>, varianza <strong>${p.varianza}</strong>: la razón varianza/media es <strong>${p.razon}</strong>, muy cerca de 1, como en una distribución de Poisson. El tiempo de servicio (44.5 min) se modela exponencial.`;
-    $('tablaMetrica').innerHTML = `<thead><tr><th>Pedidos en la hora (k)</th><th>Horas observadas</th><th>% observado</th><th>% Poisson (λ = ${p.media})</th></tr></thead>
-      <tbody>${D.frecuencias.map((f, i) => `<tr><td>${i + 1}</td><td class="cifra">${f}</td><td class="cifra">${numero((100 * f) / n, 1)} %</td><td class="cifra">${numero(100 * poisson(i + 1, p.media), 1)} %</td></tr>`).join('')}</tbody>`;
-  } else {
-    $('notaMetrica').innerHTML = `Utilización de cada hora frente a la meta de seguridad del 80 % (celda 25). ${planMet === 'actual' ? 'Hoy, de 9 a 11 h y a las 15 h pasa del 80 %.' : planMet === 'milp' ? 'Con el plan MILP todas las horas quedan bajo el 80 %.' : planMet === 'recomendado' ? 'El plan recomendado acepta horas sobre el 80 % (con ρ < 1) a cambio de no pagar ocio: en la simulación espera y pierde rutas como hoy.' : 'Con el plan de espera ≤ 15 min, la más alta queda en 57 %.'}`;
-    $('tablaMetrica').innerHTML = `<thead><tr><th>Hora</th><th>Despachadores</th><th>ρ</th><th>Estado</th></tr></thead>
-      <tbody>${S.HORAS.map((h, i) => `<tr class="${m[i].rho >= N.limiteSeguridad ? 'critica' : ''}"><td>${horaTexto(h)}</td><td class="cifra">${c[i]}</td><td class="cifra">${numero(100 * m[i].rho, 1)} %</td>
-        <td>${m[i].rho < N.limiteSeguridad ? 'Bajo el 80 %' : m[i].rho < 1 ? 'Sobre el 80 %: cola larga' : 'Inestable'}</td></tr>`).join('')}</tbody>`;
+function reiniciarAnio() {
+  sim.acum = { dias: 0, pedidos: 0, cancelados: 0, ventaPerdida: 0, esperaTotal: 0 };
+  sim.serie = [];
+  pintarAnio();
+}
+function sumarDia(r) {
+  const a = sim.acum;
+  a.dias++; a.pedidos += r.pedidos; a.cancelados += r.cancelados; a.ventaPerdida += r.ventaPerdida; a.esperaTotal += r.esperaTotal;
+  sim.serie.push({ x: a.dias, y: S.MARGEN * a.ventaPerdida });
+}
+function pintarAnio() {
+  const a = sim.acum, id = sim.caso, anio = sim.modo === 'anio';
+  $('tituloAnio').textContent = anio ? `Acumulado de 2025 · ${S.CASOS[id].corto}` : `Todo 2025 con ${S.CASOS[id].corto} (para comparar)`;
+  const base = anio ? a : { dias: S.DIAS.length, pedidos: ANUAL[id].pedidos, cancelados: ANUAL[id].cancelados, ventaPerdida: ANUAL[id].ventaPerdida };
+  const planilla = planillaDias(id, base.dias), perdida = S.MARGEN * base.ventaPerdida, total = planilla + perdida;
+  const hoy = base.dias ? planillaDias('c2', base.dias) + HOY_ACUM[Math.min(base.dias, HOY_ACUM.length) - 1] : 0, dif = hoy - total;
+  const datos = [
+    ['Días simulados', `${base.dias} de ${S.DIAS.length}`],
+    ['Pedidos', numero(base.pedidos)],
+    ['Cancelados', `${numero(base.cancelados)} <span class="ic">${base.pedidos ? numero((100 * base.cancelados) / base.pedidos, 1) : 0} %</span>`, base.cancelados > 0],
+    ['Venta perdida', soles(base.ventaPerdida), base.ventaPerdida > 0],
+    ['Ganancia perdida', soles(perdida), perdida > 0],
+    ['Planilla pagada', soles(planilla)],
+    ['Costo total', soles(total)],
+    [id === 'c2' ? 'Frente a hoy' : dif >= 0 ? 'Ahorro frente a hoy' : 'Pérdida frente a hoy', id === 'c2' ? 'es el caso de hoy' : soles(Math.abs(dif)), dif < 0],
+  ];
+  $('contadoresAnio').innerHTML = datos.map(([dt, dd, malo]) => `<div class="${malo ? 'malo' : ''}"><dt>${dt}</dt><dd>${dd}</dd></div>`).join('');
+  if (graficos.anio) {
+    graficos.anio.data.datasets[0].data = anio ? sim.serie : ANUAL[id].dias.reduce((s, d, i) => { s.push({ x: i + 1, y: (s.length ? s[s.length - 1].y : 0) + S.MARGEN * d.ventaPerdida }); return s; }, []);
+    graficos.anio.data.datasets[0].label = `${S.CASOS[id].corto}: ganancia perdida acumulada`;
+    graficos.anio.data.datasets[0].borderColor = COLOR_CASO()[id];
+    graficos.anio.data.datasets[1].hidden = id === 'c2';
+    graficos.anio.update('none');
   }
-  if (graficos.metrica || graficosVisibles.has('metrica')) CREAR.metrica();
 }
 
-/* ---------- 5. Optimización realista (sección 6 del notebook) ---------- */
-
-let topeOptimo = false;
-const filasOptimo = () => O.filas.filter((f) => (topeOptimo ? f.tope || !f.conPT : !f.tope));
-const MOD_CORTO = { 'Solo full-time': 'Solo full-time', 'Full-time + medio tiempo del notebook': 'FT + medio tiempo del notebook',
-  'Full-time + medio tiempo a cualquier hora': 'FT + medio tiempo a cualquier hora', 'Full-time + medio tiempo + por horas': 'FT + medio tiempo + por horas',
-  'Jornada de 10 h (como hoy) + medio tiempo': 'Jornada de 10 h + medio tiempo', 'Jornada de 10 h (como hoy) + medio tiempo + por horas': 'Jornada de 10 h + medio tiempo + por horas' };
-const nombreTurno = (t) => t.replace(' (08-17, alm. 12-13)', '').replace(' (09-18, alm. 14-15)', '').replace(' (08-17, alm. 13-14)', '');
-function pintarOptimo() {
-  const rec = O.filas[0];
-  const kpis = [
-    ['Costo real de hoy al mes', O.totalHoy, (v) => soles(v, 0), `${soles(O.costoHoyBase, 2)} de planilla + ${soles(O.costoExtraHoy, 2)} por 2 h extra diarias + horas extra tras las 18:00`],
-    ['Plan recomendado al mes', rec.total, (v) => soles(v, 0), `${rec.personas} personas; espera ${numero(rec.espera, 1)} min y ${numero(rec.perdida, 1)} % de rutas perdidas (hoy ${numero(O.hoy.espera, 1)} min y ${numero(O.hoy.perdida, 1)} %)`, true],
-    ['Ahorro frente a hoy', rec.ahorro, (v) => soles(v, 0), `${soles(12 * rec.ahorro, 0)} al año; ${soles(O.totalMilp - rec.total, 0)} al mes frente al plan MILP`],
-    ['Horas pagadas sin pedidos', rec.ocio, (v) => `${numero(v, 1)} h/día`, `hoy ${numero(O.hoy.ocio_h, 1)} h/día; utilización ${numero(O.hoy.utilizacion, 0)} % → ${numero(rec.utilizacion, 0)} %`],
-  ];
-  $('kpisOptimo').innerHTML = kpis.map(([et, , , pie, lider]) => `<div class="${lider ? 'lider' : ''}"><dt>${et}</dt><dd>0</dd><span class="pie">${pie}</span></div>`).join('');
-  $('kpisOptimo').querySelectorAll('dd').forEach((dd, i) => contar(dd, kpis[i][1], kpis[i][2], 1300));
-  $('planRecomendado').innerHTML = Object.entries(rec.plan).map(([t, n]) => `<span class="chip ${t.startsWith('Por horas') ? 'ph' : t.startsWith('FT 10') ? 'diez' : ''}">${n} × ${nombreTurno(t)}</span>`).join('');
-  $('horasPorHoras').textContent = O.horasPorHoras;
-  pintarTablaOptimo();
-  sensibilidad();
-}
-function pintarTablaOptimo() {
-  document.querySelectorAll('#topeOptimo button').forEach((b) => b.setAttribute('aria-pressed', (b.dataset.tope === 'si') === topeOptimo));
-  const filas = filasOptimo(), mejor = filas[0];
-  $('notaTope').innerHTML = topeOptimo
-    ? `Con el tope de 40 % de part-time que usa el notebook, <strong>ningún plan con el mismo servicio sale más barato que hoy</strong>: el mejor cuesta ${soles(-mejor.ahorro, 0)} más al mes. Conviene confirmar si la norma realmente lo exige.`
-    : `Sin el tope, la combinación de una jornada de 10 h (como la de hoy), un full-time y personal por horas en los picos es la más barata: ahorra ${soles(mejor.ahorro, 0)} al mes con el mismo servicio. Las barras verdes cuestan menos que hoy.`;
-  $('tablaOptimo').innerHTML = `<thead><tr><th>Modalidad</th><th>Tope 40 %</th><th>Plan</th><th>Personas</th><th>Costo total</th><th>Ahorro vs hoy</th><th>Espera</th><th>Rutas perdidas</th><th>Utilización</th><th>Ocio pagado</th></tr></thead>
-    <tbody><tr class="total"><td>Hoy: 3 × 10 h</td><td>—</td><td>3 × jornada de 10 h</td><td class="cifra">3</td><td class="cifra">${soles(O.totalHoy, 2)}</td><td class="cifra">—</td>
-      <td class="cifra">${numero(O.hoy.espera, 2)} min</td><td class="cifra">${numero(O.hoy.perdida, 2)} %</td><td class="cifra">${numero(O.hoy.utilizacion, 1)} %</td><td class="cifra">${numero(O.hoy.ocio_h, 1)} h</td></tr>
-    ${filas.map((f) => `<tr class="${f.ahorro > 0 ? 'mejor-fila' : ''}"><td>${MOD_CORTO[f.modalidad] || f.modalidad}</td><td>${f.conPT ? (f.tope ? 'Sí' : 'No') : '—'}</td>
-      <td class="plan-celda">${Object.entries(f.plan).map(([t, n]) => `${n} × ${nombreTurno(t)}`).join(', ')}</td><td class="cifra">${f.personas}</td><td class="cifra">${soles(f.total, 2)}</td>
-      <td class="cifra ${f.ahorro > 0 ? 'mejor' : 'peor'}">${f.ahorro > 0 ? '+' : '−'}${soles(Math.abs(f.ahorro), 2)}</td><td class="cifra">${numero(f.espera, 2)} min</td>
-      <td class="cifra">${numero(f.perdida, 2)} %</td><td class="cifra">${numero(f.utilizacion, 1)} %</td><td class="cifra">${numero(f.ocio, 1)} h</td></tr>`).join('')}</tbody>`;
-  if (graficos.optimo) CREAR.optimo();
-}
-$('topeOptimo').addEventListener('click', (e) => { if (e.target.dataset.tope) { topeOptimo = e.target.dataset.tope === 'si'; pintarTablaOptimo(); } });
-function sensibilidad() {
-  const f = Number($('factorHora').value) / 100, rec = O.filas[0];
-  const costo = rec.total + O.horasPorHoras * (S.C_PT / 4) * (f - 1), ahorro = O.totalHoy - costo;
-  $('vFactor').textContent = `${Math.round(f * 100)} %`;
-  const v = $('vSensibilidad');
-  v.classList.toggle('mal', ahorro <= 0);
-  v.textContent = ahorro > 0
-    ? `El plan costaría ${soles(costo, 0)} al mes: ahorra ${soles(ahorro, 0)} al mes (${soles(12 * ahorro, 0)} al año). Conviene contratar por horas mientras esa hora no cueste más de ${numero(O.equilibrioPct, 0)} % sobre la del medio tiempo.`
-    : `El plan costaría ${soles(costo, 0)} al mes: ${soles(-ahorro, 0)} más que hoy. A este precio conviene cubrir los picos con medio tiempo de 4 h en vez de personal por horas.`;
-}
-$('factorHora').addEventListener('input', sensibilidad);
-$('verRecomendado').addEventListener('click', () => {
-  Object.assign(estado, { plan: { ...S.PLANES.recomendado.plan }, preset: 'recomendado', crec: 0, aus: 0, caso: null });
-  cambioPlan();
-  $('dia').scrollIntoView({ behavior: reducirMovimiento ? 'auto' : 'smooth' });
-  ponerReproduccion(true);
-});
-
-/* ---------- 6. Escenarios: qué le conviene más al cliente (sección 7 del notebook) ---------- */
-
-const EC = S.ESCENARIOS_CLIENTE;
-const CORTO_ESC = ['Base 2025', 'T. baja', 'T. alta', '+10 %', 'Ausentismo', 'S/ 1,130', 'Agencia', 'Mejor servicio'];
-const DESC_ESC = [
-  'La demanda promedio de 2025, la misma de la sección anterior.',
-  'Febrero, el mes más tranquilo del CSV: 16 % menos pedidos que el promedio.',
-  'Diciembre, el mes con más pedidos del CSV: 27 % más que el promedio (en 2025 trabajaron 4 despachadores).',
-  'Si en 2026 la demanda crece 10 %.',
-  'Cada trabajador falta, en promedio, 1 de cada 20 días.',
-  'Si los sueldos se calculan con un mínimo de S/ 1,130 en vez de S/ 1,025: todos los costos de personal suben 10 %.',
-  'Si el personal por horas se contrata con una agencia y cada hora cuesta 20 % más.',
-  'Si el cliente exige perder como máximo el 3 % de las rutas y esperar como máximo 10 min en promedio.',
-];
-const minimoRho1 = (demanda) => S.LAMBDA.map((l) => Math.floor((l * demanda) / S.MU_H) + 1);
-const chipsPlan = (plan, sinNucleo) => Object.entries(plan).filter(([t]) => !(sinNucleo && EC.nucleo[t]))
-  .map(([t, n]) => `<span class="chip ${S.TURNOS[t].porHoras ? 'ph' : t === 'FT 10 h' ? 'diez' : ''}">${n} × ${t.startsWith('H ') ? `por horas ${t.slice(2)}` : t}</span>`).join('');
-let casoElegido = 0;
-$('casosChips').innerHTML = EC.escenarios.map((e, i) => `<button type="button" role="tab" data-i="${i}">${e.nombre}</button>`).join('');
-$('casosChips').addEventListener('click', (e) => { if (e.target.dataset.i !== undefined) elegirCaso(Number(e.target.dataset.i)); });
-function elegirCaso(i) {
-  casoElegido = i;
-  document.querySelectorAll('#casosChips button').forEach((b) => b.setAttribute('aria-selected', Number(b.dataset.i) === i));
-  document.querySelectorAll('#tablaMatriz [data-col]').forEach((c) => c.classList.toggle('sel', Number(c.dataset.col) === i));
-  const e = EC.escenarios[i], f = e.flexible;
-  $('casoDesc').innerHTML = `<strong>${e.nombre}.</strong> ${DESC_ESC[i]} Meta de servicio: perder como máximo ${numero(e.meta[0], 1)} % de las rutas y esperar como máximo ${numero(e.meta[1], 1)} min en promedio.`;
-  const kpis = [
-    ['Hoy (3 × 10 h)', e.hoy.costo, (v) => soles(v, 0), e.hoy.cumple ? `cumple: ${numero(e.hoy.perdida, 1)} % de rutas perdidas` : `<span class="mal">no cumple: ${numero(e.hoy.perdida, 1)} % de rutas perdidas, ${numero(e.hoy.espera, 1)} min de espera</span>`],
-    ['Mejor plan posible', e.optimo.costo, (v) => soles(v, 0), `${totalPersonas(e.optimo.plan)} personas; ${numero(e.optimo.perdida, 1)} % de rutas perdidas`],
-    ['Política flexible', f.costo, (v) => soles(v, 0), `${totalPersonas(f.plan)} personas; ${numero(f.perdida, 1)} % de rutas perdidas, ${numero(f.espera, 1)} min`, true],
-    [e.hoy.cumple ? 'Ahorro frente a hoy' : 'Costo extra frente a hoy', Math.abs(e.hoy.costo - f.costo), (v) => soles(v, 0), e.hoy.cumple ? (e.hoy.costo >= f.costo ? `al mes, con el mismo servicio` : 'al mes: aquí hoy es más barato') : 'al mes, para cumplir la meta que hoy no cumple'],
-  ];
-  $('casoKpis').innerHTML = kpis.map(([et, , , pie, lider]) => `<div class="${lider ? 'lider' : ''}"><dt>${et}</dt><dd>0</dd><span class="pie">${pie}</span></div>`).join('');
-  $('casoKpis').querySelectorAll('dd').forEach((dd, k) => contar(dd, kpis[k][1], kpis[k][2], 600));
-  $('casoPlan').innerHTML = chipsPlan(f.plan, true) || '<span class="chip">nadie más</span>';
-  if (graficos.caso) CREAR.caso();
-}
-function pintarMatriz() {
-  const eleccion = EC.candidatos.find((c) => c.nombre === EC.eleccion);
-  $('tablaMatriz').innerHTML = `<thead><tr><th>Plan</th>${CORTO_ESC.map((n, j) => `<th data-col="${j}" class="col-esc" title="${EC.escenarios[j].nombre}">${n}</th>`).join('')}
-      <th>Cumple</th><th>Costo promedio</th><th>Máx. arrepentimiento</th></tr></thead>
-    <tbody>${EC.candidatos.map((c) => `<tr class="${c.nombre === EC.eleccion ? 'elegido' : ''}"><td>${c.nombre}</td>
-      ${c.costos.map((v, j) => `<td data-col="${j}" class="cifra ${c.cumple[j] ? 'cumple' : 'falla'}" title="${c.cumple[j] ? 'Cumple' : 'No cumple la meta de servicio'}">${numero(v, 0)}${c.cumple[j] ? '' : ' ✗'}</td>`).join('')}
-      <td class="cifra">${c.cumple.filter(Boolean).length} de 8</td><td class="cifra">${soles(c.promedio, 0)}</td>
-      <td class="cifra">${c.arrepentimiento === null ? '<span class="peor">falla en algún escenario</span>' : soles(c.arrepentimiento, 0)}</td></tr>`).join('')}</tbody>`;
-  document.querySelectorAll('#tablaMatriz th[data-col]').forEach((th) => th.addEventListener('click', () => elegirCaso(Number(th.dataset.col))));
-  const milp = EC.candidatos.find((c) => c.nombre.startsWith('Plan MILP')), alta = EC.candidatos.find((c) => c.nombre.startsWith('Óptimo de temporada alta'));
-  const hoyC = EC.candidatos.find((c) => c.nombre.startsWith('Hoy')), rec = EC.candidatos.find((c) => c.nombre.startsWith('Plan recomendado'));
-  const fila = (k) => { const e = EC.escenarios[k]; return `<tr><td>${e.nombre}</td><td>${chipsPlan(e.flexible.plan, true)}</td><td class="cifra">${soles(e.flexible.costo, 0)}</td></tr>`; };
-  $('recomendacion').innerHTML = `
-    <p class="reco-et">Lo que más le conviene a DENLU</p>
-    <h3>Núcleo fijo de 2 personas + personal por horas según la temporada</h3>
-    <p>${chipsPlan(EC.nucleo, false)} todo el año, y se suma personal por horas según los pedidos esperados. Es el único plan que cumple el servicio en los 8 escenarios: <strong>${soles(eleccion.promedio, 0)} al mes</strong> en promedio.</p>
-    <div class="tabla-ancha"><table class="resultados"><thead><tr><th>Temporada</th><th>Se suma al núcleo</th><th>Costo al mes</th></tr></thead><tbody>${[1, 0, 2].map(fila).join('')}</tbody></table></div>
-    <details class="porque"><summary>¿Por qué esta y no otra?</summary>
-    <ul>
-      <li><strong>Es la única que cumple la meta de servicio en los 8 escenarios</strong> a un costo razonable: ${soles(eleccion.promedio, 0)} al mes en promedio, y nunca más de ${soles(eleccion.arrepentimiento, 0)} por encima del mejor plan posible de cada escenario.</li>
-      <li><strong>Los 3 despachadores de hoy</strong> fallan en ${8 - hoyC.cumple.filter(Boolean).length} de 8 escenarios (temporada alta, crecimiento, ausentismo y mejor servicio). <strong>El plan de la sección anterior dejado fijo todo el año</strong> queda justo en el límite y también falla en ${8 - rec.cumple.filter(Boolean).length}.</li>
-      <li><strong>El plan MILP</strong> cuesta ${soles(milp.promedio - eleccion.promedio, 0)} más al mes en promedio y falla en diciembre. <strong>Contratar todo el año para diciembre</strong> cumple siempre, pero cuesta ${soles(alta.promedio - eleccion.promedio, 0)} más al mes en promedio.</li>
-      <li><strong>Cómo aplicarla:</strong> contratar el núcleo, tener una bolsa de personal por horas entrenado y revisar el plan cada mes con los pedidos esperados. Si la hora por horas sube más de ~${numero(O.equilibrioPct, 0)} % sobre la de medio tiempo, cambiar esos bloques por medio tiempo de 4 h.</li>
-    </ul></details>`;
-}
-$('simularCaso').addEventListener('click', () => {
-  const e = EC.escenarios[casoElegido];
-  Object.assign(estado, { plan: { ...e.flexible.plan }, preset: null, crec: Math.round((e.demanda - 1) * 1000) / 10, aus: e.ausentismo * 100, caso: e.nombre });
-  cambioPlan();
-  $('dia').scrollIntoView({ behavior: reducirMovimiento ? 'auto' : 'smooth' });
-  ponerReproduccion(true);
-});
-
-/* ---------- 8. ROI ---------- */
-
-let modoRoi = 'notebook';
-$('vistaRoi').addEventListener('click', (e) => {
-  const k = e.target.dataset.roi;
-  if (!k) return;
-  modoRoi = k;
-  document.querySelectorAll('#vistaRoi button').forEach((b) => b.setAttribute('aria-pressed', b.dataset.roi === k));
-  pintarRoi(true);
-});
-function pintarRoi(animar) {
-  const r = modoRoi === 'notebook' ? R : RC, base = modoRoi === 'notebook' ? N.ventaPerdida : S.VENTA_POR_ESPERA;
-  $('notaRoi').innerHTML = modoRoi === 'notebook'
-    ? `Como en la celda 11 del notebook: el plan recupera el 95 % de <strong>toda</strong> la venta perdida de 2025 (${soles(N.ventaPerdida, 2)}) y cuesta ${soles(R.inversion, 2)} más de planilla al año.`
-    : `Según el CSV, solo ${soles(S.VENTA_POR_ESPERA, 2)} de la venta perdida viene de pedidos que perdieron su ruta por esperar; el resto se debe a quiebres de stock y otras entregas tardías. Si el plan recupera el 95 % de eso, la planilla extra no se paga con ventas: su beneficio es de servicio (menos espera y menos rutas perdidas).`;
-  const columnas = [
-    { et: modoRoi === 'notebook' ? 'Venta perdida 2025' : 'Venta perdida por la espera', v: base, color: C['serie-actual'] },
-    { et: 'Ventas recuperadas (95 %)', v: r.recuperado, color: C.verde },
-    { et: 'Inversión adicional de planilla', v: -r.inversion, color: C.rojo },
-    { et: 'Beneficio neto anual', v: r.beneficio, color: r.beneficio >= 0 ? C.acero : C.rojo },
-  ];
-  const max = Math.max(...columnas.map((c) => Math.abs(c.v)));
-  $('cascada').innerHTML = columnas.map((c, i) => `
-    <div class="columna">
-      <span class="valor" data-v="${c.v}">S/ 0</span>
-      <i class="bar" style="height:${Math.max(1, (100 * Math.abs(c.v)) / max)}%;background:${c.color};transition-delay:${i * 200}ms"></i>
-    </div>`).join('');
-  $('cascadaEt').innerHTML = columnas.map((c) => `<span>${c.et}</span>`).join('');
-  const filas = [
-    ['Tasa de cancelación de pedidos (2025)', `${N.cancelacionPct.toFixed(2)} %`],
-    [modoRoi === 'notebook' ? 'Venta perdida anual' : 'Venta perdida ligada a la espera (CSV)', soles(base, 2)],
-    ['Planilla actual al año (3 × S/ 1,373.50 × 12)', soles(r.planillaActual, 2)],
-    ['Planilla del plan MILP al año', soles(r.planillaOptima, 2)],
-    ['Inversión adicional de planilla', soles(r.inversion, 2)],
-    ['Ventas recuperadas (95 %)', soles(r.recuperado, 2)],
-    ['Beneficio neto anual', soles(r.beneficio, 2), 'total'],
-    ['Retorno de la inversión (ROI)', `${numero(r.roi, 2)} %`, 'total'],
-  ];
-  $('tablaRoi').innerHTML = `<tbody>${filas.map(([a, b, c = '']) => `<tr class="${c}"><td>${a}</td><td class="cifra">${b}</td></tr>`).join('')}</tbody>`;
-  if (animar) animarCascada(r);
-}
-function animarCascada(r = modoRoi === 'notebook' ? R : RC) {
-  $('cascada').classList.remove('visible');
-  void $('cascada').offsetWidth;                          // reinicia la transición de las barras
-  $('cascada').classList.add('visible');
-  $('cascada').querySelectorAll('.valor').forEach((el, i) => {
-    const v = Number(el.dataset.v);
-    el.dataset.valor = 0;
-    setTimeout(() => contar(el, Math.abs(v), (x) => `${v < 0 ? '−' : ''}${soles(x, 2)}`, 900), reducirMovimiento ? 0 : i * 200);
-  });
-  $('vRoi').dataset.valor = 0;
-  $('vRoi').classList.toggle('negativo', r.roi < 0);
-  setTimeout(() => contar($('vRoi'), r.roi, (x) => `${numero(x, 2)} %`, 1200), reducirMovimiento ? 0 : 800);
-}
-function pintarCausas() {
-  const total = D.causas.reduce((s, c) => s + c.monto, 0), max = Math.max(...D.causas.map((c) => c.monto));
-  $('causas').innerHTML = D.causas.map((c) => `
-    <div class="causa ${c.espera ? 'espera' : ''}">
-      <span class="c-et">${c.causa} <small>(${c.pedidos} pedidos)</small></span>
-      <span class="c-barra"><i style="width:${Math.max(0.6, (100 * c.monto) / max)}%"></i></span>
-      <span class="c-v">${soles(c.monto, 0)} · ${numero((100 * c.monto) / total, 1)} %</span>
-    </div>`).join('');
-}
-
-/* ---------- 7. Un día: quién atiende ---------- */
-
-$('presets').innerHTML = Object.entries(S.PLANES)
-  .map(([k, v]) => `<button type="button" data-preset="${k}">${v.nombre}</button>`).join('');
-$('presets').addEventListener('click', (e) => {
-  const k = e.target.dataset.preset;
-  if (!k) return;
-  Object.assign(estado, { plan: { ...S.PLANES[k].plan }, preset: k, crec: 0, aus: 0, caso: null });
-  cambioPlan();
-});
-function cambioPlan() {
-  document.querySelectorAll('#presets button').forEach((b) => b.setAttribute('aria-pressed', b.dataset.preset === estado.preset));
-  $('costoMes').textContent = estado.preset === 'actual' ? `${soles(S.costoMensual(estado.plan), 2)} + ${soles(O.costoExtraHoy, 0)} de horas extra`
-    : estado.caso ? `${soles(S.costoMensual(estado.plan), 2)} · escenario ${estado.caso}, política flexible` : soles(S.costoMensual(estado.plan), 2);
-  const n = totalPersonas(estado.plan);
-  $('totalPersonas').textContent = `${n} despachador${n === 1 ? '' : 'es'}`;
+function elegirCasoSim(id) {
+  sim.caso = id;
+  document.querySelectorAll('#casosSim button').forEach((b) => b.setAttribute('aria-pressed', b.dataset.caso === id));
+  pintarTarjeta();
+  if (sim.modo === 'anio') { sim.diaIdx = 0; reiniciarAnio(); }
   nuevoDia();
+  pintarAnio();
+}
+function elegirDia(valor) {
+  if (valor === 'anio') { sim.modo = 'anio'; sim.diaIdx = 0; reiniciarAnio(); }
+  else { sim.modo = 'dia'; sim.diaIdx = Number(valor); }
+  $('diaSel').value = valor;
+  nuevoDia();
+  pintarAnio();
+}
+$('diaSel').addEventListener('change', (e) => { elegirDia(e.target.value); ponerReproduccion(true); });
+$('fechaSel').addEventListener('change', (e) => {
+  const f = e.target.value;
+  let i = S.DIAS.findIndex((d) => d.fecha >= f);
+  if (i < 0) i = S.DIAS.length - 1;
+  sim.modo = 'dia'; sim.diaIdx = i;
+  $('diaSel').value = CRITICOS.some((c) => c.idx === i) ? String(i) : '';
+  nuevoDia(); pintarAnio(); ponerReproduccion(true);
+});
+$('saltarAnio').addEventListener('click', () => {
+  sim.modo = 'anio'; $('diaSel').value = 'anio';
+  reiniciarAnio();
+  ANUAL[sim.caso].dias.forEach(sumarDia);
+  sim.diaIdx = S.DIAS.length - 1;
+  nuevoDia();
+  dia.sumado = true;                    // el último día ya está en el total: no se vuelve a sumar al terminar
+  ponerReproduccion(false);
+  pintarAnio();
+});
+
+/* ---------- 4. Resultados ---------- */
+
+function pintarResultados() {
+  const fila = (id) => { const r = R[id]; return `<tr><td>${S.CASOS[id].corto}</td><td>${chipsCaso(id)}</td><td class="cifra">${soles(r.costoMes, 2)}</td><td class="cifra">${numero(r.pct, 1)} %</td><td class="cifra"><strong>${soles(r.ahorro)}</strong></td><td class="cifra">${numero(r.roi, 1)} %</td></tr>`; };
+  $('recomendacion').innerHTML = `<p class="reco-et">Lo que más le conviene a DENLU</p>
+    <h3>Mantener a los 2 fijos y sumar gente solo en las horas pico</h3>
+    <p>Las dos propuestas bajan las cancelaciones de ${numero(hoyR.pct, 1)} % a cerca de 2 % y ahorran más de S/ 100 mil al año en costo total. La <strong>Propuesta 1</strong> (por horas) es la más barata; la <strong>Propuesta 2</strong> (medio turno) es la formal y realista. Recomendación: <strong>Propuesta 2 como plan fijo</strong> y personal por horas solo como refuerzo en campañas (julio y diciembre), donde están los días más críticos.</p>
+    <div class="tabla-ancha"><table class="resultados"><thead><tr><th>Propuesta</th><th>Personal</th><th>Planilla al mes</th><th>Cancelados</th><th>Ahorro al año</th><th>ROI</th></tr></thead><tbody>${fila('p1')}${fila('p2')}</tbody></table></div>`;
+  const min = Math.min(...IDS.map((id) => R[id].total));
+  $('tablaResultados').innerHTML = `<thead><tr><th>Caso</th><th>Personas</th><th>Planilla al mes</th><th>Cancelados</th><th>Espera media</th><th>Venta perdida al año</th><th>Ganancia perdida al año</th><th>Costo total al año</th><th>Frente a hoy</th></tr></thead>
+    <tbody>${IDS.map((id) => { const r = R[id]; return `<tr class="${r.total === min ? 'mejor' : id === 'c2' ? 'peor' : ''}"><td>${S.CASOS[id].nombre}</td><td class="cifra">${S.CASOS[id].turnos.length}</td><td class="cifra">${soles(r.costoMes, 2)}</td>
+      <td class="cifra">${numero(r.pct, 2)} %</td><td class="cifra">${minutos(r.espera)}</td><td class="cifra">${soles(r.ventaPerdida)}</td><td class="cifra">${soles(r.margenPerdido)}</td>
+      <td class="cifra"><strong>${soles(r.total)}</strong></td><td class="cifra">${id === 'c2' ? '–' : (r.ahorro >= 0 ? 'ahorra ' : 'pierde ') + soles(Math.abs(r.ahorro))}</td></tr>`; }).join('')}</tbody>`;
+  $('tablaRoi').innerHTML = `<thead><tr><th>Plan</th><th>Inversión adicional al año</th><th>Pedidos salvados</th><th>Venta recuperada</th><th>Ganancia recuperada</th><th>Beneficio neto</th><th>ROI</th></tr></thead>
+    <tbody>${['c3', 'c4', 'p1', 'p2'].map((id) => { const r = R[id]; return `<tr class="${id === mejor ? 'mejor' : ''}"><td>${S.CASOS[id].nombre}</td><td class="cifra">${soles(r.inversion)}</td><td class="cifra">${numero(hoyR.cancelados - r.cancelados)}</td>
+      <td class="cifra">${soles(r.ventaRecuperada)}</td><td class="cifra">${soles(r.gananciaRecuperada)}</td><td class="cifra"><strong>${soles(r.beneficio)}</strong></td><td class="cifra">${numero(r.roi, 1)} %</td></tr>`; }).join('')}</tbody>`;
+  $('tablaCriticos').innerHTML = `<thead><tr><th>Día</th><th>Campaña</th><th>Pedidos</th><th>ρ del día con 2</th>${IDS.map((id) => `<th>${S.CASOS[id].corto}</th>`).join('')}</tr></thead>
+    <tbody>${CRITICOS.map((c) => `<tr><td>${fechaTexto(c.fecha)}</td><td>${c.campana || '–'}</td><td class="cifra">${c.pedidos}</td><td class="cifra">${numero(c.pedidos / (2 * S.MU_H * 10), 2)}</td>
+      ${IDS.map((id) => `<td class="cifra">${c.cancelados[id]}</td>`).join('')}</tr>`).join('')}</tbody>`;
 }
 
 /* ---------- Gráficos ---------- */
@@ -568,155 +324,71 @@ const etiquetasHora = S.HORAS.map((h) => horaTexto(h));
 const barra = (label, color, data = []) => ({ type: 'bar', label, data, backgroundColor: color, borderRadius: 4, borderSkipped: 'bottom', barPercentage: 0.9, categoryPercentage: 0.75 });
 const linea = (label, color, data, extra = {}) => ({ type: 'line', label, data, borderColor: color, backgroundColor: color, borderWidth: 2, pointRadius: 0, ...extra });
 const nuevo = (clave, canvas, config) => { if (graficos[clave]) graficos[clave].destroy(); graficos[clave] = new Chart($(canvas), config); };
+const ejeMinutos = (op, max = 660) => {
+  op.scales.x = { ...op.scales.x, type: 'linear', min: 0, max, ticks: { ...op.scales.x.ticks, stepSize: 60, callback: (v) => reloj(v).slice(0, 2) + 'h' } };
+  op.plugins.tooltip.callbacks = { title: (it) => reloj(it[0].parsed.x) };
+};
 
 const CREAR = {
-  colaReal: () => {
-    const peor = vistaCola === 'peor', datos = peor ? D.colaPeor5 : D.colaProm5;
-    const op = opcionesBase(peor ? `Pedidos en cola el ${D.peorDia.fecha} (${D.peorDia.pedidos} pedidos, ${D.peorDia.rutaPerdida} perdieron su ruta)` : 'Pedidos en cola a lo largo del día: promedio de los 299 días de 2025');
-    op.plugins.legend.display = false;
-    op.scales.x.ticks.autoSkip = false;
-    op.scales.x.ticks.callback = (v, i) => (i % 12 === 0 ? `${8 + i / 12}h` : '');
-    op.scales.y.title = { display: true, text: 'pedidos en cola', color: C['tinta-2'], font: { family: FUENTE } };
-    nuevo('colaReal', 'gColaReal', {
-      data: { labels: datos.map((_, i) => reloj(i * 5)), datasets: [linea('Pedidos en cola', C['carton-borde'], datos, { fill: true, backgroundColor: C.carton + '55', tension: 0.25, stepped: peor })] },
-      options: op,
-    });
-  },
-  esperan: () => {
-    const op = opcionesBase('Pedidos que esperaron y espera del 10 % que más esperó, por hora (CSV 2025)');
-    op.scales.y.title = { display: true, text: '% que esperó', color: C['tinta-2'], font: { family: FUENTE } };
-    op.scales.y2 = { position: 'right', beginAtZero: true, grid: { display: false }, ticks: { color: C['tinta-2'], font: { family: FUENTE } }, title: { display: true, text: 'min', color: C['tinta-2'], font: { family: FUENTE } } };
-    nuevo('esperan', 'gEsperan', {
-      data: { labels: etiquetasHora, datasets: [
-        barra('% de pedidos que esperó', S.HORAS.map((_, i) => (N.rho[i] > N.rhoObjetivo ? C.seguridad : C.acero)), D.esperaronPct),
-        linea('Espera del percentil 90 (min)', C.rojo, D.p90, { yAxisID: 'y2', pointRadius: 3 }),
-      ] },
-      options: op,
-    });
-  },
   rho: () => {
-    const rho = N.rho, op = opcionesBase('Utilización actual por hora (ρ) con 3 despachadores');
-    op.plugins.legend.display = false;
-    op.scales.y.max = 1.1;
-    op.onClick = (_, el) => { if (el.length) { detenerRecorrido(); elegirHora(el[0].index); } };
+    const op = opcionesBase('Utilización por hora con 2 despachadores: en rojo, ρ ≥ 1 (la cola crece sin límite)');
+    op.scales.y.suggestedMax = 1.5;
     nuevo('rho', 'gRho', {
       data: { labels: etiquetasHora, datasets: [
-        { ...barra('ρ por hora', rho.map((r) => (r >= 1 ? C.rojo : r > N.rhoObjetivo ? C.seguridad : C.acero)), rho), borderColor: C.tinta, borderWidth: S.HORAS.map((_, k) => (k === horaElegida ? 3 : 0)) },
-        linea('Límite ρ = 0.85', C.tinta, rho.map(() => 0.85), { borderWidth: 1.5, borderDash: [4, 3] }),
-        linea('ρ = 1: la cola crece sin límite', C.rojo, rho.map(() => 1), { borderWidth: 1.5 }),
+        barra('ρ = λ / (2 μ)', RHO_HOY.map((r) => (r >= 1 ? C.rojo : r > N.rhoObjetivo ? C.seguridad : C.acero)), RHO_HOY),
+        linea('ρ = 1: límite de estabilidad', C.rojo, RHO_HOY.map(() => 1), { borderWidth: 1.5 }),
+        linea('ρ = 0.85: nivel de servicio deseado', C.tinta, RHO_HOY.map(() => 0.85), { borderWidth: 1.5, borderDash: [4, 3] }),
       ] },
       options: op,
     });
   },
-  porHora: () => {
-    const op = opcionesBase('Despachadores por hora en cada escenario');
-    op.scales.y.ticks.stepSize = 1;
-    nuevo('porHora', 'gPorHora', {
-      data: { labels: etiquetasHora, datasets: [
-        barra('Hoy (3 fijos)', C['serie-actual'], ESCENARIOS.actual.c),
-        barra('Requerido Dₕ (ρ ≤ 0.85)', C.seguridad, requerido),
-        barra('Plan MILP', C['serie-plan'], ESCENARIOS.milp.c),
-        barra(`Plan espera ≤ ${S.WQ_MAX} min`, C.verde, ESCENARIOS.alternativo.c),
-        linea('Diciembre (4)', C.tinta, ESCENARIOS.diciembre.c, { borderDash: [5, 4], borderWidth: 1.5, stepped: 'middle' }),
+  cola: () => {
+    const op = opcionesBase('Pedidos esperando durante el día con 2 despachadores');
+    ejeMinutos(op);
+    op.scales.y.title = { display: true, text: 'pedidos en cola', color: C['tinta-2'], font: { family: FUENTE } };
+    nuevo('cola', 'gCola', {
+      type: 'line',
+      data: { datasets: [
+        linea('Cola promedio de 2025 (cada 5 min)', C['carton-borde'], DATOS.cola5.map((y, i) => ({ x: 5 * i, y })), { fill: true, backgroundColor: C.carton + '55', tension: 0.25 }),
+        linea('Balance de flujo: Qₕ = max(0, Qₕ₋₁ + λₕ − 2μ)', C.tinta, DATOS.flujo.map((y, i) => ({ x: 60 * (i + 1), y })), { borderDash: [5, 4], pointRadius: 4 }),
       ] },
-      options: op,
+      options: { ...op, parsing: false },
     });
   },
   cobertura: () => {
-    const alt = vistaPlan === 'alternativo', minimo = minimoDe(vistaPlan);
-    const op = opcionesBase(`Despachadores por hora: mínimo requerido y asignados (${ESCENARIOS[vistaPlan].nombre})`);
+    const op = opcionesBase('Despachadores por hora: hoy, propuestas y requerido Dₕ (ρ ≤ 0.85)');
     op.scales.y.ticks.stepSize = 1;
     nuevo('cobertura', 'gCobertura', {
-      data: { labels: etiquetasHora, datasets: [barra(alt ? 'Mínimo con Wq ≤ 15 min' : vistaPlan === 'recomendado' ? 'Mínimo para ρ < 1' : 'Mín. requerido (ρ ≤ 0.85)', C['serie-actual'], minimo),
-        barra('Asignado', vistaPlan === 'alternativo' || vistaPlan === 'recomendado' ? C.verde : C['serie-plan'], S.personalPorHora(S.PLANES[vistaPlan].plan))] },
-      options: op,
-    });
-  },
-  optimo: () => {
-    const filas = filasOptimo();
-    const op = opcionesBase('Costo mensual total (planilla + horas extra) de cada modalidad, frente a hoy');
-    op.indexAxis = 'y';
-    op.plugins.legend.display = false;
-    op.scales.x = { ...op.scales.y, beginAtZero: false, min: 4000, ticks: { ...op.scales.y.ticks, callback: (v) => soles(v, 0) } };
-    op.scales.y = { grid: { display: false }, ticks: { color: C['tinta-2'], font: { family: FUENTE, size: 11 } } };
-    op.plugins.tooltip.callbacks = { label: (it) => {
-      if (it.dataIndex === 0) return [`Hoy: ${soles(O.totalHoy, 2)}`, `Espera ${numero(O.hoy.espera, 1)} min · rutas perdidas ${numero(O.hoy.perdida, 1)} %`];
-      const f = filas[it.dataIndex - 1];
-      return [`${soles(f.total, 2)} (${f.ahorro > 0 ? 'ahorra' : 'cuesta más'} ${soles(Math.abs(f.ahorro), 0)})`, `Espera ${numero(f.espera, 1)} min · rutas perdidas ${numero(f.perdida, 1)} %`];
-    } };
-    const etiquetas = ['Hoy: 3 × 10 h', ...filas.map((f) => `${MOD_CORTO[f.modalidad] || f.modalidad}${f.conPT ? (f.tope ? ' (tope)' : '') : ''}`)];
-    nuevo('optimo', 'gOptimo', {
-      type: 'bar',
-      data: { labels: etiquetas, datasets: [{ ...barra('Costo mensual', [C.tinta, ...filas.map((f) => (f.ahorro > 0 ? C.verde : C['serie-actual']))], [O.totalHoy, ...filas.map((f) => f.total)]), borderSkipped: 'start' }] },
-      options: op,
-    });
-  },
-  caso: () => {
-    const e = EC.escenarios[casoElegido];
-    const op = opcionesBase(`Despachadores por hora · ${e.nombre}`);
-    op.scales.y.ticks.stepSize = 1;
-    nuevo('caso', 'gCaso', {
       data: { labels: etiquetasHora, datasets: [
-        barra('Hoy (3 × 10 h)', e.hoy.cumple ? C['serie-actual'] : C.rojo, ESCENARIOS.actual.c),
-        barra('Mejor plan posible', C['serie-plan'], e.optimo.cobertura),
-        barra('Política flexible', C.verde, e.flexible.cobertura),
-        linea('Mínimo para ρ < 1', C.tinta, minimoRho1(e.demanda), { borderDash: [5, 4], stepped: 'middle', borderWidth: 1.5 }),
+        barra('Hoy (2 fijos)', C.rojo, S.CASOS.c2.cobertura),
+        barra('Propuesta 1: por horas', C['serie-plan'], S.CASOS.p1.cobertura),
+        barra('Propuesta 2: medio turno', C.verde, S.CASOS.p2.cobertura),
+        linea('Requerido Dₕ', C.tinta, S.D, { borderDash: [5, 4], stepped: 'middle', borderWidth: 1.5 }),
       ] },
       options: op,
     });
   },
-  optCob: () => {
-    const op = opcionesBase('Despachadores por hora: hoy, plan MILP y plan recomendado');
-    op.scales.y.ticks.stepSize = 1;
-    nuevo('optCob', 'gOptCob', {
-      data: { labels: etiquetasHora, datasets: [
-        barra('Hoy (3 × 10 h)', C['serie-actual'], ESCENARIOS.actual.c),
-        barra('Plan MILP', C['serie-plan'], ESCENARIOS.milp.c),
-        barra('Plan recomendado', C.verde, ESCENARIOS.recomendado.c),
-        linea('Mínimo para ρ < 1', C.rojo, O.minimosRho1, { borderDash: [5, 4], stepped: 'middle', borderWidth: 1.5 }),
+  costo: () => {
+    const op = opcionesBase('Costo total al año = planilla + ganancia perdida por cancelaciones');
+    op.scales.x.stacked = true; op.scales.y.stacked = true;
+    op.scales.y.ticks.callback = (v) => `S/ ${v / 1000} mil`;
+    op.plugins.tooltip.callbacks = { label: (it) => `${it.dataset.label}: ${soles(it.parsed.y)}`, footer: (it) => `Total: ${soles(R[IDS[it[0].dataIndex]].total)}` };
+    nuevo('costo', 'gCosto', {
+      data: { labels: IDS.map((id) => S.CASOS[id].corto), datasets: [
+        { ...barra('Planilla al año', C.acero, IDS.map((id) => 12 * R[id].costoMes)), borderRadius: 0 },
+        barra('Ganancia perdida al año', C.rojo, IDS.map((id) => R[id].margenPerdido)),
       ] },
       options: op,
     });
   },
-  ocio: () => {
-    const op = opcionesBase('Horas pagadas sin pedidos que preparar, por día (simulación)');
-    op.indexAxis = 'y';
-    op.plugins.legend.display = false;
-    op.scales.x = { ...op.scales.y, ticks: { ...op.scales.y.ticks, callback: (v) => `${v} h` } };
-    op.scales.y = { grid: { display: false }, ticks: { color: C['tinta-2'], font: { family: FUENTE } } };
-    nuevo('ocio', 'gOcio', {
-      type: 'bar',
-      data: { labels: ['Hoy (3 × 10 h)', 'Plan MILP', 'Plan recomendado'], datasets: [barra('Ocio pagado (h/día)', [C['serie-actual'], C['serie-plan'], C.verde], [O.hoy.ocio_h, O.milp.ocio_h, O.filas[0].ocio])] },
+  mes: () => {
+    const op = opcionesBase('Ganancia perdida por mes: la cola pesa más en las campañas');
+    op.scales.y.ticks.callback = (v) => soles(v);
+    const col = COLOR_CASO();
+    nuevo('mes', 'gMes', {
+      data: { labels: MESES, datasets: IDS.filter((id) => id !== 'c1').map((id) => linea(S.CASOS[id].corto, col[id], DATOS.porMes[id], { pointRadius: 3, borderWidth: id === 'c2' || id[0] === 'p' ? 2.5 : 1.2 })) },
       options: op,
     });
-  },
-  metrica: () => {
-    const c = ESCENARIOS[planMet].c, m = metricas(c), color = planMet === 'actual' ? C['serie-actual'] : planMet === 'milp' ? C['serie-plan'] : C.verde;
-    let config;
-    if (pestana === 'lw') {
-      const op = opcionesBase(`Espera en cola (Wq) y tiempo en el sistema (W) por hora · ${ESCENARIOS[planMet].nombre}`);
-      op.scales.y.title = { display: true, text: 'minutos', color: C['tinta-2'], font: { family: FUENTE } };
-      config = { data: { labels: etiquetasHora, datasets: [barra('Wq (min)', m.map((x) => (claseEspera(x) === 'mal' ? C.rojo : claseEspera(x) === 'medio' ? C.seguridad : color)), m.map((x) => x.Wq)),
-        linea('W (min)', C.tinta, m.map((x) => x.W), { pointRadius: 3 })] }, options: op };
-    } else if (pestana === 'llegadas') {
-      const op = opcionesBase('Tiempo promedio entre llegadas por hora (minutos)');
-      const t = S.LAMBDA.map((l) => 60 / l);
-      config = { data: { labels: etiquetasHora, datasets: [barra('Minutos entre pedidos', C.acero, t),
-        linea(`Promedio general: ${numero(N.entreLlegadas, 2)} min`, C.rojo, t.map(() => N.entreLlegadas), { borderDash: [5, 4] })] }, options: op };
-    } else if (pestana === 'ajuste') {
-      const op = opcionesBase('Pedidos por hora: frecuencia observada y distribución de Poisson');
-      const n = D.frecuencias.reduce((a, b) => a + b, 0);
-      op.scales.y.title = { display: true, text: '% de las horas', color: C['tinta-2'], font: { family: FUENTE } };
-      config = { data: { labels: D.frecuencias.map((_, i) => String(i + 1)), datasets: [barra('Observado (CSV)', C.acero, D.frecuencias.map((f) => (100 * f) / n)),
-        linea(`Poisson (λ = ${N.poisson.media})`, C.rojo, D.frecuencias.map((_, i) => 100 * poisson(i + 1, N.poisson.media)), { pointRadius: 3, tension: 0.3 })] }, options: op };
-    } else {
-      const op = opcionesBase(`Utilización por hora (ρ) frente al límite de seguridad del 80 % · ${ESCENARIOS[planMet].nombre}`);
-      op.scales.y.max = 1.05;
-      op.scales.y.ticks.callback = (v) => `${Math.round(v * 100)} %`;
-      config = { data: { labels: etiquetasHora, datasets: [barra('ρ', m.map((x) => (x.rho >= N.limiteSeguridad ? C.rojo : color)), m.map((x) => x.rho)),
-        linea('Límite de seguridad 80 %', C.rojo, m.map(() => N.limiteSeguridad), { borderDash: [5, 4] })] }, options: op };
-    }
-    nuevo('metrica', 'gMetrica', config);
   },
 };
 
@@ -724,20 +396,17 @@ function crearGraficos() {
   if (!window.Chart) return;
   graficosVisibles.forEach((k) => CREAR[k]());
 
-  const opDia = opcionesBase('Pedidos en cola durante el día');
+  const opDia = opcionesBase('Pedidos en cola y despachadores en turno durante el día');
   opDia.animation = false;
-  opDia.scales.x = { ...opDia.scales.x, type: 'linear', min: 0, max: 660, ticks: { ...opDia.scales.x.ticks, stepSize: 60, callback: (v) => reloj(v).slice(0, 2) + 'h' } };
+  ejeMinutos(opDia);
   opDia.scales.y.ticks.precision = 0;
-  opDia.plugins.tooltip.callbacks = { title: (it) => reloj(it[0].parsed.x) };
   if (graficos.dia) graficos.dia.destroy();
   graficos.dia = new Chart($('gDia'), {
     type: 'line',
-    data: {
-      datasets: [
-        { label: 'Pedidos en cola', data: [], borderColor: C['carton-borde'], backgroundColor: C.carton, borderWidth: 2, pointRadius: 0 },
-        { label: 'Despachadores en turno', data: [], borderColor: C.acero, borderWidth: 2, pointRadius: 0, stepped: true },
-      ],
-    },
+    data: { datasets: [
+      { label: 'Pedidos en cola', data: [], borderColor: C['carton-borde'], backgroundColor: C.carton, borderWidth: 2, pointRadius: 0 },
+      { label: 'Despachadores en turno', data: [], borderColor: C.acero, borderWidth: 2, pointRadius: 0, stepped: true },
+    ] },
     options: { ...opDia, parsing: false },
   });
   if (dia) {
@@ -745,22 +414,36 @@ function crearGraficos() {
     graficos.dia.data.datasets.forEach((ds, i) => { ds.data = i ? dia.serie.turno : dia.serie.cola; });
     graficos.dia.update();
   }
+
+  const opA = opcionesBase('Ganancia perdida acumulada en 2025');
+  opA.animation = false;
+  // Una marca al empezar cada mes
+  const inicioMes = S.DIAS.reduce((a, d, i) => { if (!i || d.fecha.slice(5, 7) !== S.DIAS[i - 1].fecha.slice(5, 7)) a.push(i + 1); return a; }, []);
+  opA.scales.x = { ...opA.scales.x, type: 'linear', min: 0, max: S.DIAS.length, afterBuildTicks: (ax) => { ax.ticks = inicioMes.map((value) => ({ value })); },
+    ticks: { ...opA.scales.x.ticks, autoSkip: false, callback: (v) => MESES[Number(S.DIAS[v - 1].fecha.slice(5, 7)) - 1] } };
+  opA.scales.y.ticks.callback = (v) => soles(v);
+  opA.scales.y.suggestedMax = HOY_ACUM[HOY_ACUM.length - 1];   // escala del año completo desde el primer día
+  opA.plugins.tooltip.callbacks = { title: (it) => { const d = S.DIAS[it[0].parsed.x - 1]; return d ? `${fechaTexto(d.fecha)} (día ${it[0].parsed.x})` : ''; }, label: (it) => `${it.dataset.label}: ${soles(it.parsed.y)}` };
+  if (graficos.anio) graficos.anio.destroy();
+  graficos.anio = new Chart($('gAnio'), {
+    type: 'line',
+    data: { datasets: [
+      { label: '', data: [], borderColor: C.rojo, backgroundColor: C.rojo, borderWidth: 2.5, pointRadius: 0 },
+      { label: 'Hoy (2 fijos), todo el año', data: HOY_ACUM.map((y, i) => ({ x: i + 1, y })), borderColor: C['serie-actual'], borderWidth: 1.5, borderDash: [5, 4], pointRadius: 0 },
+    ] },
+    options: { ...opA, parsing: false },
+  });
+  pintarAnio();
 }
 const mostrarGraficos = (...claves) => claves.forEach((k) => { graficosVisibles.add(k); if (window.Chart) CREAR[k](); });
 
 /* ---------- Aparición por pasos ---------- */
 
-// Cada sección se anima la primera vez que entra en pantalla
 const alVer = {
-  cola: () => { mostrarGraficos('colaReal', 'esperan'); if (typeof DemoCola !== 'undefined') DemoCola.ver(); },
-  diagnostico: () => { mostrarGraficos('rho'); elegirHora(horaElegida); },
-  porhora: () => { mostrarGraficos('porHora'); pintarHorario(true); },
-  plan: () => { pintarOptimo(); mostrarGraficos('cobertura'); pintarGantt('recomendado'); },
-  optimo: () => mostrarGraficos('optimo', 'optCob', 'ocio'),
-  casos: () => { pintarMatriz(); mostrarGraficos('caso'); elegirCaso(casoElegido); },
-  metricas: () => { mostrarGraficos('metrica'); pintarMetrica(); },
-  roi: () => animarCascada(),
-  dia: () => { if (!reducirMovimiento && dia.log.length && dia.t === 0) ponerReproduccion(true); },
+  cola: () => { mostrarGraficos('rho', 'cola'); if (typeof DemoCola !== 'undefined') DemoCola.ver(); },
+  modelo: () => { mostrarGraficos('cobertura'); pintarGantt('p1'); },
+  simulacion: () => { if (!reducirMovimiento && dia.log.length && dia.t === 0) ponerReproduccion(true); },
+  resultados: () => mostrarGraficos('costo', 'mes'),
 };
 const vistos = new Set();
 // Al abrir un "Ver más", los gráficos que estaban ocultos toman su tamaño real
@@ -949,25 +632,21 @@ const origenCamion = (k) => {
   return P.anden.dir ? [x, y + d] : [x + d, y];
 };
 
-let dia = null, semillaDia = 1, reproduciendo = false, velocidad = 5, ultimoMs = null;
+let dia = null, reproduciendo = false, velocidad = 10, ultimoMs = null;
 const PIEL = ['#8d5a3b', '#c68a5e', '#6b4429', '#b07850', '#9c6644', '#d19a6c'];
 const PELO = ['#1d1612', '#3a2618', '#120f0e', '#4a3020', '#2b1d14', '#1a1a1a'];
 
 function nuevoDia() {
   const seguia = reproduciendo;
-  const rng = S.crearRng(104729 * semillaDia + 17);
-  const presentes = S.presentesDelDia(estado.plan, estado.aus / 100, rng);
-  const personal = S.personalPorHora(presentes);
-  const log = [];
-  if (totalPersonas(estado.plan)) {
-    S.simularDia(personal, S.LAMBDA.map((l) => l * (1 + estado.crec / 100)), estado.T, estado.p, rng, log);
-  }
-  const cap = Math.max(1, ...personal);
+  const d = S.DIAS[sim.diaIdx], turnos = S.turnosDe(sim.caso);
+  const res = S.simularDia(d.o, turnos, true), log = res.log;
+  estado.crec = (d.n / S.PROMEDIO_DIA - 1) * 100;          // λ del día = λ promedio × pedidos del día / promedio
+  const cap = Math.max(1, turnos.length);
   dia = {
-    log, i: 0, t: 0, fin: log.length ? log[log.length - 1].t : 0, cap,
-    pedidos: new Map(), cola: [], estaciones: Array.from({ length: cap }, (_, k) => ({ activa: k < personal[0], pedido: null })),
-    flota: [0, 1, 2].map(() => ({ carga: 0, enCamino: 0, d: 0, fase: 'anden', viajes: 0, puerta: 1, pop: 0, humoT: 0 })), faltaron: totalPersonas(estado.plan) - totalPersonas(presentes),
-    cont: { llegados: 0, despachados: 0, perdieron: 0, cancelados: 0, espera: 0, nEspera: 0 },
+    log, i: 0, t: 0, fin: res.fin, cap, res, fecha: d.fecha, campana: d.campana,
+    pedidos: new Map(), cola: [], estaciones: turnos.map((h) => ({ activa: S.deTurno(h, 0), pedido: null })),
+    flota: [0, 1, 2].map(() => ({ carga: 0, enCamino: 0, d: 0, fase: 'anden', viajes: 0, puerta: 1, pop: 0, humoT: 0 })), faltaron: 0,
+    cont: { llegados: 0, despachados: 0, perdieron: 0, cancelados: 0, espera: 0, nEspera: 0, ventaPerdida: 0 },
     serie: { cola: [], turno: [] }, minuto: -1, servicios: log.filter((e) => e.tipo === 'inicio'), burbujas: [],
     humo: [], avisos: [], hora: 0, sel: null, hover: null, ocioMin: 0,
   };
@@ -1081,6 +760,7 @@ function aplicar(ev) {
   } else if (ev.tipo === 'cancela') {
     sacarDeCola();
     p.estado = 'cancelado';
+    d.cont.ventaPerdida += ev.monto || 0;
     d.cont.cancelados++; d.cont.espera += ev.t - p.llegada; d.cont.nEspera++;
     avisar(ev.motivo === 'stock' ? 'Sin stock' : 'Canceló', true);
   } else if (ev.tipo === 'inicio') {
@@ -1122,10 +802,10 @@ function aplicar(ev) {
 // Aviso que entra por arriba del plano y se desvanece
 const aviso = (texto, malo = false) => { dia.avisos.push({ texto, malo, vida: 2.6 }); dia.avisos = dia.avisos.slice(-2); };
 function avisoHora(h) {
-  if (h >= 10) { aviso('18:00 · Cierra el almacén: horas extra', dia.cola.length > 0); return; }
+  if (h >= 10) { aviso('18:00 · Cierra la recepción: se termina lo pendiente', dia.cola.length > 0); return; }
   const lam = S.LAMBDA[h] * (1 + estado.crec / 100), n = dia.estaciones.filter((e) => e.activa).length;
-  const punta = lam > n * S.MU_H;                           // llegan más pedidos de los que se pueden atender
-  aviso(`${horaTexto(8 + h)} · llegan ~${lam.toFixed(1)} pedidos/h · ${n} en turno${punta ? ' · no alcanzan' : ''}`, punta);
+  const rho = lam / (n * S.MU_H);
+  aviso(`${horaTexto(8 + h)} · llegan ~${lam.toFixed(1)} pedidos/h · ${n} en turno · ρ = ${rho.toFixed(2)}${rho >= 1 ? ': se forma la cola' : ''}`, rho >= 1);
 }
 
 function avanzar(hasta) {
@@ -1774,18 +1454,14 @@ function dibujar() {
 
 function pintarContadores() {
   const c = dia.cont;
-  // Minutos-persona trabajados después de las 18:00 hasta el momento actual de la animación
-  const extra = dia.servicios.reduce((s, e) => s + Math.max(0, Math.min(dia.t, e.t + e.dur) - Math.max(e.t, S.CIERRE)), 0);
   const datos = [
-    // La hora y el personal en turno ya se ven en el reloj y en los puestos del almacén
-    ['En cola', dia.cola.length],
-    ['Pedidos que llegaron', c.llegados],
+    ['Día', `${fechaTexto(dia.fecha)}${dia.campana ? ` <span class="ic">${dia.campana}</span>` : ''}`],
+    ['En cola', dia.cola.length, dia.cola.length >= 3],
+    ['Pedidos que llegaron', `${c.llegados} <span class="ic">de ${dia.res.pedidos}</span>`],
     ['Despachados', c.despachados],
-    ['Perdieron su ruta', c.perdieron, c.perdieron > 0],
-    ['Cancelados', c.cancelados, c.cancelados > 0],
-    ['Venta perdida hoy', soles(c.cancelados * S.TICKET), c.cancelados > 0],
-    ['Espera promedio', c.nEspera ? `${(c.espera / c.nEspera).toFixed(1)} min` : '–'],
-    ['Horas extra hoy', `${Math.round(extra)} min <span class="ic">S/ ${((extra / 60) * estado.hx).toFixed(2)}</span>`],
+    ['Cancelados hoy', c.cancelados, c.cancelados > 0],
+    ['Venta perdida hoy', soles(c.ventaPerdida), c.cancelados > 0],
+    ['Espera promedio', c.nEspera ? `${numero(c.espera / c.nEspera, 1)} min` : '–'],
     ['Pagado sin pedidos hoy', `${numero(dia.ocioMin / 60, 1)} h <span class="ic">S/ ${numero((dia.ocioMin / 60) * COSTO_HORA, 2)}</span>`],
   ];
   $('contadores').innerHTML = datos.map(([dt, dd, malo]) => `<div class="${malo ? 'malo' : ''}"><dt>${dt}</dt><dd>${dd}</dd></div>`).join('');
@@ -1793,21 +1469,39 @@ function pintarContadores() {
 
 function ponerReproduccion(si) {
   reproduciendo = si;
-  $('play').textContent = si ? 'Pausar' : (dia.t > 0 && !terminado() ? 'Continuar' : 'Reproducir');
-  const faltas = dia.faltaron ? ` Hoy faltaron ${dia.faltaron} despachador${dia.faltaron > 1 ? 'es' : ''}.` : '';
-  $('estadoDia').textContent = !dia.log.length ? 'Sin despachadores no hay día que simular.'
-    : terminado() ? `Día terminado a las ${reloj(dia.fin)}.${faltas}` : `Día ${semillaDia}.${faltas}`;
+  const fin = terminado() && (sim.modo === 'dia' || sim.diaIdx >= S.DIAS.length - 1);
+  $('play').textContent = si ? 'Pausar' : (dia.t > 0 && !fin ? 'Continuar' : 'Reproducir');
+  const caso = S.CASOS[sim.caso].corto;
+  $('estadoDia').textContent = sim.modo === 'anio'
+    ? (fin ? `${caso} · año 2025 completo` : `${caso} · día ${sim.diaIdx + 1} de ${S.DIAS.length}`)
+    : `${caso} · ${fechaTexto(dia.fecha)}${terminado() ? ' · día terminado' : ''}`;
 }
 const terminado = () => dia.i >= dia.log.length && dia.t >= dia.fin;
 
 $('play').addEventListener('click', () => {
   if (!dia.log.length) return;
-  if (terminado()) nuevoDia();
+  if (terminado()) {
+    if (sim.modo === 'anio' && sim.diaIdx >= S.DIAS.length - 1) { sim.diaIdx = 0; reiniciarAnio(); }
+    else if (sim.modo === 'anio') { pasarDia(); }
+    nuevoDia();
+  }
   ponerReproduccion(!reproduciendo);
 });
-$('reiniciar').addEventListener('click', () => nuevoDia());
-$('otroDia').addEventListener('click', () => { semillaDia++; nuevoDia(); ponerReproduccion(true); });
+$('reiniciar').addEventListener('click', () => { if (sim.modo === 'anio') { sim.diaIdx = 0; reiniciarAnio(); } nuevoDia(); });
+$('otroDia').addEventListener('click', () => {
+  if (sim.modo === 'anio') { if (!terminado()) { avanzarHastaFin(); } pasarDia(); }
+  else sim.diaIdx = (sim.diaIdx + 1) % S.DIAS.length;
+  nuevoDia(); ponerReproduccion(true);
+});
 $('velocidad').addEventListener('change', (e) => { velocidad = Number(e.target.value); });
+// Modo año: suma el día que terminó y pasa al siguiente
+function pasarDia() {
+  if (!dia.sumado) { sumarDia(dia.res); dia.sumado = true; }
+  if (sim.diaIdx < S.DIAS.length - 1) sim.diaIdx++;
+  pintarAnio();
+}
+// Termina el día al instante (sin animar) para poder sumarlo
+function avanzarHastaFin() { dia.t = dia.fin; avanzar(dia.t); }
 // Cambia de plano (apaisado o apilado) sin perder la hora: rehace el día y lo adelanta hasta donde iba
 function rehacerPlano() {
   const antes = P;
@@ -1848,18 +1542,18 @@ lienzo.addEventListener('click', (e) => { const k = personaEn(e); dia.sel = k ==
 
 // Una frase que cuenta en palabras lo que se ve en el almacén
 function narrar() {
-  if (!dia.log.length) return 'Agrega al menos un despachador para ver el día.';
-  if (terminado()) return `Terminó el día: se despacharon ${dia.cont.despachados} pedidos y se cancelaron ${dia.cont.cancelados}.`;
-  if (dia.t === 0) return 'Pulsa Reproducir: los pedidos llegan por teléfono a ventas, se imprimen y esperan en el tablero.';
-  if (dia.t >= S.CIERRE) return 'Son más de las 18:00: lo que queda en el tablero se despacha con horas extra.';
+  if (!dia.log.length) return 'Este día no tiene pedidos.';
+  if (terminado()) return `Terminó el ${fechaTexto(dia.fecha)}: se despacharon ${dia.cont.despachados} pedidos y se cancelaron ${dia.cont.cancelados} (${soles(dia.cont.ventaPerdida)} de venta perdida).`;
+  if (dia.t === 0) return 'Pulsa Reproducir: los pedidos llegan a ventas, se imprimen y esperan en el tablero a que un despachador los aliste y los suba al camión.';
+  if (dia.t >= S.CIERRE) return 'Son más de las 18:00: ya no llegan pedidos y quienes están de turno terminan lo pendiente.';
   const enCola = dia.cola.length;
-  const sinCamion = dia.cola.filter((id) => dia.pedidos.get(id).perdio).length;
+  const porPerder = dia.cola.filter((id) => dia.pedidos.get(id).perdio).length;
   const libres = dia.estaciones.filter((e) => e.activa && e.pedido === null).length;
   const comedor = dia.personas.filter((p) => !p.activo).length;
-  const enComedor = comedor ? ` ${comedor} en el comedor (almuerzo o fuera de turno).` : '';
-  if (!enCola) return (libres ? `Todo al día: ${libres} despachador${libres > 1 ? 'es' : ''} libre${libres > 1 ? 's' : ''} en su mesa.` : 'Todos los despachadores están trabajando y no hay pedidos esperando.') + enComedor;
-  if (sinCamion) return `Hay cola: ${enCola} hoja${enCola > 1 ? 's' : ''} en el tablero y ${sinCamion} ya perdi${sinCamion > 1 ? 'eron' : 'ó'} su camión (borde rojo).` + enComedor;
-  return `Se forma cola: ${enCola} hoja${enCola > 1 ? 's' : ''} en el tablero porque todos los despachadores están ocupados.` + enComedor;
+  const fuera = comedor ? ` ${comedor} fuera de turno (comedor).` : '';
+  if (!enCola) return (libres ? `Todo al día: ${libres} despachador${libres > 1 ? 'es' : ''} libre${libres > 1 ? 's' : ''} en su mesa.` : 'Todos los despachadores están trabajando y no hay pedidos esperando.') + fuera;
+  if (porPerder) return `Hay cola: ${enCola} hoja${enCola > 1 ? 's' : ''} en el tablero y ${porPerder} lleva${porPerder > 1 ? 'n' : ''} más de 45 min (borde rojo): a los 60 min el cliente cancela.` + fuera;
+  return `Se forma cola: ${enCola} hoja${enCola > 1 ? 's' : ''} en el tablero porque todos los despachadores están ocupados alistando y cargando.` + fuera;
 }
 
 let ultimoGrafico = 0;
@@ -1870,7 +1564,11 @@ function cuadro(ms) {
   if (reproduciendo) {
     dia.t = Math.min(dia.fin, dia.t + dt * velocidad);
     avanzar(dia.t);
-    if (terminado()) ponerReproduccion(false);
+    if (terminado()) {
+      // En el modo año, al terminar un día se suma y empieza el siguiente sin detenerse
+      if (sim.modo === 'anio' && sim.diaIdx < S.DIAS.length - 1) { pasarDia(); nuevoDia(); ponerReproduccion(true); }
+      else { if (sim.modo === 'anio' && !dia.sumado) pasarDia(); ponerReproduccion(false); }
+    }
     pintarContadores();
     if (graficos.dia && ms - ultimoGrafico > 150) { graficos.dia.update(); ultimoGrafico = ms; }
   }
@@ -1888,14 +1586,13 @@ function cuadro(ms) {
 leerColores();
 pintarBotonTema();
 pintarPortada();
-pintarEvidencia();
-pintarHorario(true);
-pintarGantt('recomendado');
-pintarMetrica();
-pintarRoi(false);
-pintarCausas();
+pintarProblema();
+pintarModelo();
+pintarGantt('p1');
+pintarResultados();
+reiniciarAnio();
+elegirCasoSim('c2');
 crearGraficos();
-cambioPlan();
 ponerVista(hayWebGL);
 if (!hayWebGL) $('vistaBarra').hidden = true;
 if (!window.Chart) {
