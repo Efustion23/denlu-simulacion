@@ -247,9 +247,17 @@ function pintarTarjeta() {
     <p class="equipo-total">En total <strong>${n} persona${n > 1 ? 's' : ''}</strong>: ${textoTipos(tipos)}.</p>
     <div class="equipo-lista">${tarjetas}</div>
     <dl class="kpis kpis-caso">${kpis.map(([et, , , pie, lider]) => `<div class="${lider ? 'lider' : ''}"><dt>${et}</dt><dd>0</dd><span class="pie">${pie}</span></div>`).join('')}</dl>
+    <p class="calidad-caso">${calidadCaso(id)}</p>
     <p class="porque">${porque}</p>`;
   $('tarjetaCaso').querySelectorAll('dd').forEach((dd, k) => contar(dd, kpis[k][1], kpis[k][2], 600));
   pintarFranja();
+}
+
+// Calidad de servicio del caso: entregas a tiempo (simulación) y horas que cumplen la meta (M/M/c)
+function calidadCaso(id) {
+  const cob = S.CASOS[id].cobertura, ok = cob.filter((c, i) => S.pEsperaMas(S.LAMBDA[i], c) <= S.CALIDAD.meta).length;
+  const sem = ok === 10 ? 'verde' : ok >= 5 ? 'amarillo' : 'rojo';
+  return `<b class="q ${sem}">Calidad de servicio</b> Se entrega a tiempo el <strong>${numero(100 - R[id].pct, 1)} %</strong> de los pedidos y la meta (como máximo el 10 % espera más de ${S.CALIDAD.t} min) se cumple en <strong>${ok} de las 10 horas</strong>.`;
 }
 
 // Franja del día: cuántas personas y de qué tipo trabajan en cada hora (la hora actual resaltada)
@@ -258,9 +266,12 @@ function pintarFranja() {
   $('franjaPersonas').innerHTML = S.HORAS.map((h, i) => {
     const quienes = caso.turnos.map(([t, hs], k) => (hs.includes(h) ? `<i style="background:${TIPOS[tipoTurno(t)].color}" title="D${k + 1} · ${TIPOS[tipoTurno(t)].nombre}">D${k + 1}</i>` : '')).join('');
     const c = caso.cobertura[i], falta = c < S.D[i];
-    return `<div class="franja-hora" data-h="${i}"><span class="fh">${h}h</span><div class="fp">${quienes}</div><span class="fn ${falta ? 'falta' : ''}">${c}${falta ? ` <small>de ${S.D[i]}</small>` : ''}</span></div>`;
+    const q = S.pEsperaMas(S.LAMBDA[i], c), sem = q <= S.CALIDAD.meta ? 'verde' : q <= 0.25 ? 'amarillo' : 'rojo';
+    return `<div class="franja-hora" data-h="${i}"><span class="fh">${h}h</span><div class="fp">${quienes}</div><span class="fn ${falta ? 'falta' : ''}">${c}${falta ? ` <small>de ${S.D[i]}</small>` : ''}</span>
+      <span class="fq ${sem}" title="Pedidos que esperan más de ${S.CALIDAD.t} min (M/M/c)">${q >= 1 ? '100' : numero(100 * q, 0)} %</span></div>`;
   }).join('');
-  $('leyendaTipos').innerHTML = contarTipos(tiposDe(sim.caso)).map(([t]) => `<span><i style="background:${TIPOS[t].color}"></i>${TIPOS[t].nombre}</span>`).join('') + '<span class="nota-falta">En rojo: menos personas de las que pide la hora (ρ &gt; 0.85)</span>';
+  $('leyendaTipos').innerHTML = contarTipos(tiposDe(sim.caso)).map(([t]) => `<span><i style="background:${TIPOS[t].color}"></i>${TIPOS[t].nombre}</span>`).join('') + '<span class="nota-falta">Número en rojo: menos personas de las que pide la hora (ρ &gt; 0.85)</span>'
+    + `<span>Abajo, el semáforo de calidad: % de pedidos que esperan más de ${S.CALIDAD.t} min. <b class="q verde">≤ 10 % cumple la meta</b> <b class="q amarillo">10–25 %</b> <b class="q rojo">&gt; 25 %</b></span>`;
 }
 let ultimoAhora = '';
 function pintarPersonasAhora() {
@@ -273,7 +284,7 @@ function pintarPersonasAhora() {
   $('nAhora').textContent = tipos.length;
   $('txtAhora').innerHTML = dia.t >= S.CIERRE ? `persona${tipos.length === 1 ? '' : 's'} terminando lo pendiente después de las 18:00`
     : `persona${tipos.length === 1 ? '' : 's'} trabajando ahora${tipos.length ? ` (${textoTipos(tipos)})` : ''} · llegan ~${numero(lam, 1)} pedidos/h · <span class="${rho >= 1 ? 'mal' : ''}">ρ = ${Number.isFinite(rho) ? numero(rho, 2) : '∞'}${rho >= 1 ? ': no alcanzan, se forma la cola' : ''}</span>`;
-  document.querySelectorAll('#franjaPersonas .franja-hora').forEach((el) => el.classList.toggle('ahora', Number(el.dataset.h) === h && dia.t > 0 && dia.t < S.CIERRE));
+  document.querySelectorAll('#franjaPersonas .franja-hora').forEach((el) => el.classList.toggle('actual', Number(el.dataset.h) === h && dia.t > 0 && dia.t < S.CIERRE));
 }
 
 function reiniciarAnio() {
@@ -429,7 +440,8 @@ function pintarResultados() {
   $('recomendacion').innerHTML = `<p class="reco-et">Lo que más le conviene a DENLU</p>
     <h3>Mantener a los 2 fijos y sumar gente solo en las horas pico</h3>
     <p>Las dos propuestas bajan las cancelaciones de ${numero(hoyR.pct, 1)} % a cerca de 2 % y ahorran más de S/ 100 mil al año en costo total. La <strong>Propuesta 1</strong> (por horas) es la más barata; la <strong>Propuesta 2</strong> (medio turno) es la formal y realista. Recomendación: <strong>Propuesta 2 como plan fijo</strong> y personal por horas solo como refuerzo en campañas (julio y diciembre), donde están los días más críticos.</p>
-    <div class="tabla-ancha"><table class="resultados"><thead><tr><th>Propuesta</th><th>Personal</th><th>Planilla al mes</th><th>Cancelados</th><th>Ahorro al año</th><th>ROI</th></tr></thead><tbody>${fila('p1')}${fila('p2')}</tbody></table></div>`;
+    <div class="tabla-ancha"><table class="resultados"><thead><tr><th>Propuesta</th><th>Personal</th><th>Planilla al mes</th><th>Cancelados</th><th>Ahorro al año</th><th>ROI</th></tr></thead><tbody>${fila('p1')}${fila('p2')}</tbody></table></div>
+    <p><strong>Con más presupuesto, alta calidad:</strong> para que como máximo el 10 % de los pedidos espere más de ${S.CALIDAD.t} min en <em>todas</em> las horas, hacen falta ${S.CALIDAD.Q.join(', ')} personas por hora (de 8 a 17 h). Con medio turno son ${S.CALIDAD.ac2.personas - 2} personas de medio turno, ${soles(S.CALIDAD.ac2.extra, 2)} al mes de personal adicional; con personal por horas, ${S.CALIDAD.ac1.personas - 2} personas, ${soles(S.CALIDAD.ac1.extra, 2)}. Así se entrega a tiempo el ${numero(100 - S.CALIDAD.ac2.pct, 1)} % de los pedidos y el costo total al año baja a ${soles(S.CALIDAD.ac2.total)} (medio turno) y ${soles(S.CALIDAD.ac1.total)} (por horas): la calidad se paga sola, porque casi no se pierden ventas.</p>`;
   const min = Math.min(...IDS.map((id) => R[id].total));
   $('tablaResultados').innerHTML = `<thead><tr><th>Caso</th><th>Personas</th><th>Planilla al mes</th><th>Cancelados</th><th>Espera media</th><th>Venta perdida al año</th><th>Ganancia perdida al año</th><th>Costo total al año</th><th>Frente a hoy</th></tr></thead>
     <tbody>${IDS.map((id) => { const r = R[id]; return `<tr class="${r.total === min ? 'mejor' : id === 'c2' ? 'peor' : ''}"><td>${S.CASOS[id].nombre}</td><td class="cifra">${S.CASOS[id].turnos.length}</td><td class="cifra">${soles(r.costoMes, 2)}</td>

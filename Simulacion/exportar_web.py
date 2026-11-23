@@ -29,6 +29,14 @@ CASOS = [
     ('p2', 'Propuesta 2: 2 fijos + medio turno', 'Propuesta 2: medio turno', P2),
 ]
 mes = pd.to_datetime(df.fecha).dt.month
+# Calidad de servicio: meta P(Wq > 30 min) <= 10 % en cada hora y planes de alta calidad (restricción R8 del notebook)
+Q = C.requeridos_calidad(LAMBDA, MU)
+CALIDAD = {'t': 30, 'meta': 0.10, 'Q': Q}
+for k, ops in (('ac1', [t for t in C.TURNOS if t.startswith('Por horas')]), ('ac2', [t for t in C.TURNOS if t.startswith('Medio')])):
+    plan = C.optimizar(Q, ops, {'Fijo 08-18': 2}, LAMBDA)
+    f = pd.DataFrame(C.simular_anio(df, plan)); c = int(f.cancelados.sum()); cm = C.costo_mensual(plan)
+    CALIDAD[k] = dict(plan=plan, costoMes=cm, extra=round(cm - 2 * C.C_FIJO, 2), pct=round(100 * c / len(df), 2),
+                      total=round(12 * cm + f.margen_perdido.sum(), 2), personas=sum(plan.values()))
 resultados, por_mes, por_dia = {}, {}, {}
 for cid, nombre, corto, plan in CASOS:
     f = pd.DataFrame(C.simular_anio(df, plan))
@@ -95,6 +103,7 @@ datos = {
     'cola5': [round(float(v), 3) for v in cola5], 'flujo': flujo,
     'criticos': [dict(fecha=f, pedidos=int(n), campana=dias_js[[d[0] for d in dias_js].index(f)][1],
                       cancelados={cid: int(por_dia[cid][f]) for cid in por_dia}) for f, n in top.items()],
+    'calidad': CALIDAD,
     'dias': dias_js,
     'secciones': [dict(nombre=sec, visitas=int(visitas[sec])) for sec in SECC],
     'productos': [dict(nombre=r.producto, seccion=SECC.index(r.seccion), precio=r.precio_S, margen=r.margen_pct,
