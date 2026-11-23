@@ -123,12 +123,18 @@
 
     <section class="bloque paso-seccion revelar" id="simulacion" aria-labelledby="tSim">
       <div class="bloque-cab">
-        <h2 id="tSim"><span class="num">3</span>Simulación por casos: todo 2025</h2>
+        <h2 id="tSim"><span class="num">3</span>Las 3 simulaciones: todo 2025</h2>
         <span class="estado" id="estadoDia" aria-live="polite"></span>
       </div>
-      <p class="nota-bloque">Los mismos 12,070 pedidos de 2025, con el personal del caso que elijas. El almacén está dividido en <strong>8 secciones</strong>: cada despachador camina a las secciones de los productos de su pedido, y la sección más pedida está más cerca de empaque. Mira cómo se forma la cola y cuánto se pierde o se gana.</p>
-      <div class="horas casos-chips" id="casosSim" role="group" aria-label="Caso a simular"></div>
+      <p class="nota-bloque">Elige una simulación y pulsa <strong>Reproducir</strong>. Las tres usan los mismos 12,070 pedidos de 2025; solo cambia quién trabaja. Arriba ves a cada persona real con su horario y su costo, y abajo cuántas están trabajando en cada momento.</p>
+      <div class="sim-pasos" id="simPasos" role="tablist" aria-label="Simulación"></div>
+      <div class="horas casos-chips" id="casosSim" role="group" aria-label="Cuántos fijos"></div>
       <div class="caso" id="tarjetaCaso" aria-live="polite"></div>
+      <div class="equipo-ahora" aria-live="polite">
+        <p class="ahora"><strong id="nAhora">0</strong><span id="txtAhora">personas trabajando ahora</span></p>
+        <div class="franja" id="franjaPersonas" aria-label="Personas en turno en cada hora del día"></div>
+        <p class="leyenda-tipos" id="leyendaTipos"></p>
+      </div>
       <div class="selector-plan">
         <label class="velocidad">Qué simular
           <select id="diaSel" aria-label="Día o año a simular"></select>

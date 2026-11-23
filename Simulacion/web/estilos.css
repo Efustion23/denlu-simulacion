@@ -741,3 +741,43 @@ details.mas[open] > summary { border-bottom: 1px solid var(--linea); }
 .resultados td.rojo { color: var(--rojo); font-weight: 600; }
 #kpisProductos { margin-bottom: 16px; }
 @media (max-width: 700px) { .barra-sec { display: none; } }
+
+/* ---------- Las 3 simulaciones: pestañas, personas y franja del día ---------- */
+.sim-pasos { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 4px 0 14px; }
+.sim-pasos button { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; align-items: center; padding: 12px 14px; border: 2px solid var(--linea); border-radius: 12px; background: var(--hoja); color: var(--tinta); text-align: left; cursor: pointer; transition: border-color 150ms var(--curva), background-color 150ms var(--curva); }
+.sim-pasos button:hover { border-color: var(--tinta-2); }
+.sim-pasos button .num { grid-row: span 2; }
+.sim-pasos button strong { font-size: 16px; }
+.sim-pasos button > span:last-child { color: var(--tinta-2); font-size: 13px; line-height: 1.3; }
+.sim-pasos button[aria-selected="true"] { border-color: var(--tinta); background: var(--panel); }
+.casos-chips[hidden] { display: none; }
+.equipo-total { margin: 0 0 10px; font-size: 15px; }
+.equipo-lista { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; margin-bottom: 14px; }
+.persona-card { display: grid; gap: 1px; padding: 9px 11px; border: 1px solid var(--linea); border-left: 5px solid var(--tipo); border-radius: 9px; font-size: 13px; line-height: 1.35; animation: aparecer 400ms var(--curva) both; }
+.persona-card b { font-size: 16px; }
+.persona-card .tp { color: var(--tipo); font-weight: 600; }
+.persona-card span:not(.tp) { color: var(--tinta-2); }
+.porque { margin: 4px 0 0; font-size: 14px; line-height: 1.55; }
+.equipo-ahora { margin: 14px 0 10px; padding: 12px 14px; border: 1px solid var(--linea); border-radius: 12px; }
+.equipo-ahora .ahora { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 10px; margin: 0 0 10px; font-size: 14px; }
+.equipo-ahora .ahora strong { font-family: 'Barlow Condensed', Barlow, sans-serif; font-size: 40px; line-height: 1; }
+.equipo-ahora .mal { color: var(--rojo); font-weight: 600; }
+.franja { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 4px; }
+.franja-hora { display: grid; grid-template-rows: auto 1fr auto; gap: 4px; padding: 6px 3px; border-radius: 8px; background: var(--panel); text-align: center; transition: box-shadow 200ms var(--curva), background-color 200ms var(--curva); }
+.franja-hora.ahora { background: var(--hoja); box-shadow: 0 0 0 2px var(--tinta); }
+.franja-hora .fh { color: var(--tinta-2); font-size: 12px; }
+.franja-hora .fp { display: flex; flex-direction: column-reverse; align-items: center; justify-content: flex-start; gap: 3px; min-height: 92px; }
+.franja-hora .fp i { display: block; width: 100%; max-width: 46px; padding: 2px 0; border-radius: 5px; color: #fff; font-size: 10px; font-style: normal; font-weight: 600; }
+.franja-hora .fn { font-weight: 600; font-size: 15px; }
+.franja-hora .fn.falta { color: var(--rojo); }
+.franja-hora .fn small { font-weight: 500; font-size: 11px; }
+.leyenda-tipos { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 10px 0 0; color: var(--tinta-2); font-size: 13px; }
+.leyenda-tipos i { display: inline-block; width: 11px; height: 11px; margin-right: 6px; border-radius: 3px; vertical-align: -1px; }
+.leyenda-tipos .nota-falta { color: var(--rojo); }
+@media (max-width: 700px) {
+  .sim-pasos { grid-template-columns: minmax(0, 1fr); }
+  .franja { gap: 2px; }
+  .franja-hora { padding: 5px 1px; }
+  .franja-hora .fp i { font-size: 8px; }
+  .franja-hora .fh { font-size: 10px; }
+}

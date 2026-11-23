@@ -567,7 +567,8 @@ const Vista3D = (() => {
       const accion = tramo && ['recoger', 'empacar', 'revisar'].includes(tramo.tipo) ? tramo.tipo : null;
       const colores = tr ? [0, 1, 2].map((i) => colorTrabajo(tr, i)) : null;
       posar(g, { camina: per.camina, paso: per.paso, carga: per.carga, colores, accion, sentado, come: sentado, t: sentado ? dia.t * 0.7 + k : dia.t * 1.4 });
-      ponerTexto(g.userData.etiqueta, `D${k + 1}`, { fondo: per.activo || tr ? '#2d5c88' : '#5b5f5c', tam: 36 });
+      const tp = TIPOS[dia.tipos[k]];
+      ponerTexto(g.userData.etiqueta, `D${k + 1} · ${tp.nombre.toLowerCase()}`, { fondo: per.activo || tr ? tp.color : '#5b5f5c', tam: 36 });
       g.userData.etiqueta.visible = !sentado;
       g.userData.zz.visible = ocioso(per);
       if (g.userData.zz.visible) g.userData.zz.position.y = 2.35 + (reducirMovimiento ? 0 : 0.06 * Math.sin(performance.now() / 500 + k));
