@@ -11,7 +11,11 @@ totales del año que muestra son iguales a los del notebook.
 
 1. **Que se forma la cola.** Con 2 despachadores, en 6 de las 10 horas llegan más pedidos de los que pueden
    despachar (ρ > 1). Los pedidos se acumulan en el tablero hora tras hora.
-2. **Casos arriba de la simulación.** Se elige con qué personal se simula:
+2. **Tres simulaciones, cada una con su botón:** (1) solo personal fijo, con botones para 1, 2 (hoy), 3 o 4 fijos;
+   (2) medio turno (Propuesta 2); (3) por horas (Propuesta 1). En cada una se ve a cada persona real (D1, D2…)
+   con su tipo, horario, horas al día y costo al mes, una franja con cuántas personas trabajan en cada hora y un
+   contador en vivo de las que trabajan ahora. En el 3D, cada persona lleva su tipo en la etiqueta.
+   Estos son los casos:
 
    | Caso | Personal | Planilla al mes |
    |---|---|---|

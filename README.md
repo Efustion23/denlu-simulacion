@@ -64,8 +64,10 @@ El almacén tiene **8 secciones** y 48 productos. Para alistar un pedido, el des
    - La función objetivo y las restricciones de las 2 propuestas.
    - El horario de cada persona frente al requerido D<sub>h</sub>.
    - *Ver más:* los costos laborales y la cobertura por hora.
-3. **Simulación por casos:**
-   - Arriba se elige el caso: 1, 2 (hoy), 3 o 4 fijos, o una de las 2 propuestas.
+3. **Las 3 simulaciones:**
+   - Se elige una de tres con un botón: **solo personal fijo** (1, 2 = hoy, 3 o 4 fijos), **medio turno** (Propuesta 2) o **por horas** (Propuesta 1).
+   - Cada simulación muestra a cada persona real (D1, D2…): si es fija, de medio turno o por horas, su horario, sus horas al día y su costo al mes. También explica por qué el caso ahorra o pierde al año.
+   - Una franja del día muestra cuántas personas trabajan en cada hora y de qué tipo, con un contador en vivo de las que trabajan ahora y el ρ de ese momento.
    - Se puede simular todo 2025 día por día, uno de los 10 días más críticos o cualquier fecha.
    - Velocidades de 1 s = 2, 5, 10, 30 o 60 min, o 1 s = 1 día. Un botón da el año completo al instante.
    - El almacén en 3D o en plano 2D, dividido en 8 secciones: cada despachador camina a las secciones de su pedido.

@@ -76,6 +76,20 @@ const nombreTurno = (t) => t.replace('Fijo 08-18', 'Fijo 08–18').replace(/(\d\
 const chipsCaso = (id) => Object.entries(S.CASOS[id].plan)
   .map(([t, n]) => `<span class="chip ${t.startsWith('Por') ? 'ph' : t.startsWith('Medio') ? 'mt' : 'diez'}">${n} × ${nombreTurno(t)}</span>`).join('');
 const hoyR = R.c2, mejor = R.p1.total < R.p2.total ? 'p1' : 'p2';
+// Tipos de personal: color y nombre en las tarjetas, en la franja del día y en la etiqueta de cada persona del 3D
+const TIPOS = {
+  fijo: { nombre: 'Fijo', plural: 'fijos', color: '#2d5c88' },
+  medio: { nombre: 'Medio turno', plural: 'de medio turno', color: '#7a55a8' },
+  horas: { nombre: 'Por horas', plural: 'por horas', color: '#2f8a5b' },
+};
+const tipoTurno = (t) => (t.startsWith('Por') ? 'horas' : t.startsWith('Medio') ? 'medio' : 'fijo');
+const costoTurno = (t, horas) => (t.startsWith('Por') ? S.P.TARIFA_HORA * horas.length * S.P.DIAS_MES : t.startsWith('Medio') ? S.P.C_MT : S.P.C_FIJO);
+const horario = (h) => `${horaTexto(h[0])}–${horaTexto(h[h.length - 1] + 1)}`;
+const contarTipos = (tipos) => Object.keys(TIPOS).map((t) => [t, tipos.filter((x) => x === t).length]).filter(([, n]) => n);
+const textoTipos = (tipos) => contarTipos(tipos).map(([t, n]) => `${n} ${n === 1 ? TIPOS[t].nombre.toLowerCase() : TIPOS[t].plural}`).join(' + ');
+// Las 3 simulaciones: solo fijos (1 a 4), medio turno (Propuesta 2) y por horas (Propuesta 1)
+const SIMS = { fijos: ['c1', 'c2', 'c3', 'c4'], p2: ['p2'], p1: ['p1'] };
+let simTipo = 'fijos';
 
 /* ---------- Portada ---------- */
 
@@ -187,24 +201,79 @@ const CRITICOS = DATOS.criticos.map((c) => ({ ...c, idx: S.DIAS.findIndex((d) =>
 const HOY_ACUM = ANUAL.c2.dias.reduce((a, d) => { a.push((a.length ? a[a.length - 1] : 0) + d.margenPerdido); return a; }, []);
 const planillaDias = (id, n) => (12 * S.CASOS[id].costoMes * n) / S.DIAS.length;
 
-$('casosSim').innerHTML = IDS.map((id) => `<button type="button" data-caso="${id}" class="${R[id].pct > 10 ? 'critica' : ''}">${S.CASOS[id].corto}</button>`).join('');
+$('casosSim').innerHTML = SIMS.fijos.map((id) => `<button type="button" data-caso="${id}" class="${R[id].pct > 10 ? 'critica' : ''}">${S.CASOS[id].turnos.length} fijo${S.CASOS[id].turnos.length > 1 ? 's' : ''}${id === 'c2' ? ' (hoy)' : ''}</button>`).join('');
+const tiposDe = (id) => S.CASOS[id].turnos.map(([t]) => tipoTurno(t));
+$('simPasos').innerHTML = [
+  ['fijos', 'Solo personal fijo', '1, 2 (hoy), 3 o 4 personas fijas todo el día'],
+  ['p2', 'Medio turno', `Propuesta 2: ${textoTipos(tiposDe('p2'))}`],
+  ['p1', 'Por horas', `Propuesta 1: ${textoTipos(tiposDe('p1'))}`],
+].map(([k, t, d], i) => `<button type="button" role="tab" data-sim="${k}"><span class="num">${i + 1}</span><strong>${t}</strong><span>${d}</span></button>`).join('');
+$('simPasos').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) elegirSim(b.dataset.sim); });
+function elegirSim(tipo) {
+  simTipo = tipo;
+  document.querySelectorAll('#simPasos button').forEach((b) => b.setAttribute('aria-selected', b.dataset.sim === tipo));
+  $('casosSim').hidden = tipo !== 'fijos';
+  elegirCasoSim(tipo === 'fijos' ? (SIMS.fijos.includes(sim.caso) ? sim.caso : 'c2') : tipo);
+}
 $('casosSim').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) elegirCasoSim(b.dataset.caso); });
 $('diaSel').innerHTML = `<option value="anio">Todo 2025, día por día</option>
   <optgroup label="Días más críticos (más pedidos)">${CRITICOS.map((c) => `<option value="${c.idx}">${fechaTexto(c.fecha)} · ${c.pedidos} pedidos${c.campana ? ' · ' + c.campana : ''}</option>`).join('')}</optgroup>`;
 
 function pintarTarjeta() {
-  const id = sim.caso, r = R[id], rho = rhoCaso(id), rmax = Math.max(...rho), h = rho.indexOf(rmax);
+  const id = sim.caso, caso = S.CASOS[id], r = R[id], tipos = tiposDe(id), n = tipos.length;
+  const tarjetas = caso.turnos.map(([t, h], k) => {
+    const tp = tipoTurno(t);
+    return `<div class="persona-card" style="--tipo:${TIPOS[tp].color}"><b>D${k + 1}</b><span class="tp">${TIPOS[tp].nombre}</span>
+      <span>${horario(h)} · ${h.length} h al día${tp === 'fijo' ? ' (2 extra)' : ''}</span><span>${soles(costoTurno(t, h), 2)} al mes</span></div>`;
+  }).join('');
   const kpis = [
-    ['Planilla al mes', r.costoMes, (v) => soles(v, 2), `${S.CASOS[id].turnos.length} persona${S.CASOS[id].turnos.length > 1 ? 's' : ''}`],
-    ['ρ en la hora más cargada', rmax, (v) => numero(v, 2), rmax >= 1 ? `<span class="mal">${horaTexto(S.HORAS[h])}: ≥ 1, la cola crece sin límite</span>` : `${horaTexto(S.HORAS[h])}: &lt; 1, la cola es estable`],
-    ['Pedidos cancelados en 2025', r.pct, (v) => `${numero(v, 1)} %`, `${numero(r.cancelados)} · ${soles(r.ventaPerdida)} de venta perdida`],
-    [id === 'c2' ? 'Costo total al año' : r.ahorro >= 0 ? 'Ahorro frente a hoy' : 'Pérdida frente a hoy', id === 'c2' ? r.total : Math.abs(r.ahorro), (v) => soles(v),
-      id === 'c2' ? 'planilla + ganancia perdida' : `al año · costo total ${soles(r.total)}`, true],
+    ['Pagas en personal al año', 12 * r.costoMes, (v) => soles(v), `${soles(r.costoMes, 2)} al mes`],
+    ['Pierdes en ganancia al año', r.margenPerdido, (v) => soles(v), `se cancela el ${numero(r.pct, 1)} % de los pedidos`],
+    ['Costo total al año', r.total, (v) => soles(v), 'personal + ganancia perdida'],
+    [id === 'c2' ? 'Es la situación de hoy' : r.ahorro >= 0 ? 'Ahorras frente a hoy' : 'Pierdes frente a hoy', id === 'c2' ? r.total : Math.abs(r.ahorro), (v) => soles(v),
+      id === 'c2' ? 'el costo total a mejorar' : `al año (hoy: ${soles(hoyR.total)})`, true],
   ];
-  $('tarjetaCaso').innerHTML = `<p class="caso-desc"><strong>${S.CASOS[id].nombre}.</strong> ${DESC[id]}</p>
-    <div class="plan-chips">${chipsCaso(id)}</div>
-    <dl class="kpis kpis-caso">${kpis.map(([et, , , pie, lider]) => `<div class="${lider ? 'lider' : ''}"><dt>${et}</dt><dd>0</dd><span class="pie">${pie}</span></div>`).join('')}</dl>`;
+  const ph = S.CASOS[id].turnos.filter(([t]) => t.startsWith('Por')), mt = S.CASOS[id].turnos.filter(([t]) => t.startsWith('Medio'));
+  const maxJuntos = Math.max(...caso.cobertura), horasPH = ph.reduce((a, [, h]) => a + h.length, 0);
+  const porque = {
+    c1: `Una sola persona no alcanza en casi ninguna hora (ρ &gt; 1 casi todo el día): se cancela la mitad de los pedidos. Lo que se ahorra en sueldo se pierde muchas veces en ventas.`,
+    c2: `Es lo que pasa hoy: 2 personas todo el día no alcanzan en las horas pico (ρ &gt; 1 en 6 de las 10 horas). Se cancela el ${numero(r.pct, 1)} % de los pedidos y se pierden ${soles(r.margenPerdido)} de ganancia al año.`,
+    c3: `Un fijo más cuesta ${soles(S.P.C_FIJO, 2)} al mes y trabaja las 10 horas, aunque solo hace falta en los picos. Igual conviene: los cancelados bajan de ${numero(hoyR.pct, 1)} % a ${numero(r.pct, 1)} %.`,
+    c4: `Con 4 fijos casi no hay cola (${numero(r.pct, 1)} % de cancelados), pero se paga a 2 personas más todo el día aunque muchas horas no tienen pedidos.`,
+    p1: `<strong>¿Por qué ahorra más?</strong> Las ${ph.length} personas por horas solo vienen en los picos, 2 horas cada una: son ${horasPH} horas al día × ${soles(S.P.TARIFA_HORA, 2)} = ${soles(horasPH * S.P.TARIFA_HORA, 2)} al día (${soles(horasPH * S.P.TARIFA_HORA * S.P.DIAS_MES, 2)} al mes). Es menos que un fijo más y pone hasta <strong>${maxJuntos} personas a la vez</strong> en las horas pico. Los cancelados bajan de ${numero(hoyR.pct, 1)} % a ${numero(r.pct, 1)} %: la ganancia perdida baja de ${soles(hoyR.margenPerdido)} a ${soles(r.margenPerdido)} al año. Por eso, aunque la planilla sube ${soles(r.costoMes - hoyR.costoMes, 2)} al mes, al año ahorra ${soles(r.ahorro)}.`,
+    p2: `<strong>¿Por qué ahorra?</strong> Las ${mt.length} personas de medio turno trabajan 4 horas en los picos, con contrato y beneficios (${soles(S.P.C_MT, 2)} cada una al mes). Hay hasta <strong>${maxJuntos} personas a la vez</strong> en las horas pico y los cancelados bajan de ${numero(hoyR.pct, 1)} % a ${numero(r.pct, 1)} %: la ganancia perdida baja de ${soles(hoyR.margenPerdido)} a ${soles(r.margenPerdido)} al año. Cuesta un poco más que por horas, pero es formal.`,
+  }[id];
+  $('tarjetaCaso').innerHTML = `<p class="caso-desc"><strong>${caso.nombre}.</strong> ${DESC[id]}</p>
+    <p class="equipo-total">En total <strong>${n} persona${n > 1 ? 's' : ''}</strong>: ${textoTipos(tipos)}.</p>
+    <div class="equipo-lista">${tarjetas}</div>
+    <dl class="kpis kpis-caso">${kpis.map(([et, , , pie, lider]) => `<div class="${lider ? 'lider' : ''}"><dt>${et}</dt><dd>0</dd><span class="pie">${pie}</span></div>`).join('')}</dl>
+    <p class="porque">${porque}</p>`;
   $('tarjetaCaso').querySelectorAll('dd').forEach((dd, k) => contar(dd, kpis[k][1], kpis[k][2], 600));
+  pintarFranja();
+}
+
+// Franja del día: cuántas personas y de qué tipo trabajan en cada hora (la hora actual resaltada)
+function pintarFranja() {
+  const caso = S.CASOS[sim.caso];
+  $('franjaPersonas').innerHTML = S.HORAS.map((h, i) => {
+    const quienes = caso.turnos.map(([t, hs], k) => (hs.includes(h) ? `<i style="background:${TIPOS[tipoTurno(t)].color}" title="D${k + 1} · ${TIPOS[tipoTurno(t)].nombre}">D${k + 1}</i>` : '')).join('');
+    const c = caso.cobertura[i], falta = c < S.D[i];
+    return `<div class="franja-hora" data-h="${i}"><span class="fh">${h}h</span><div class="fp">${quienes}</div><span class="fn ${falta ? 'falta' : ''}">${c}${falta ? ` <small>de ${S.D[i]}</small>` : ''}</span></div>`;
+  }).join('');
+  $('leyendaTipos').innerHTML = contarTipos(tiposDe(sim.caso)).map(([t]) => `<span><i style="background:${TIPOS[t].color}"></i>${TIPOS[t].nombre}</span>`).join('') + '<span class="nota-falta">En rojo: menos personas de las que pide la hora (ρ &gt; 0.85)</span>';
+}
+let ultimoAhora = '';
+function pintarPersonasAhora() {
+  if (!dia) return;
+  const h = Math.min(9, Math.floor(dia.t / 60)), tipos = dia.tipos.filter((_, k) => dia.estaciones[k].activa || dia.personas[k].trabajo);
+  const lam = S.LAMBDA[h] * (1 + estado.crec / 100), rho = tipos.length ? lam / (tipos.length * S.MU_H) : Infinity;
+  const clave = `${h}|${tipos.join()}|${dia.t >= S.CIERRE}`;
+  if (clave === ultimoAhora) return;
+  ultimoAhora = clave;
+  $('nAhora').textContent = tipos.length;
+  $('txtAhora').innerHTML = dia.t >= S.CIERRE ? `persona${tipos.length === 1 ? '' : 's'} terminando lo pendiente después de las 18:00`
+    : `persona${tipos.length === 1 ? '' : 's'} trabajando ahora${tipos.length ? ` (${textoTipos(tipos)})` : ''} · llegan ~${numero(lam, 1)} pedidos/h · <span class="${rho >= 1 ? 'mal' : ''}">ρ = ${Number.isFinite(rho) ? numero(rho, 2) : '∞'}${rho >= 1 ? ': no alcanzan, se forma la cola' : ''}</span>`;
+  document.querySelectorAll('#franjaPersonas .franja-hora').forEach((el) => el.classList.toggle('ahora', Number(el.dataset.h) === h && dia.t > 0 && dia.t < S.CIERRE));
 }
 
 function reiniciarAnio() {
@@ -734,6 +803,7 @@ const PELO = ['#1d1612', '#3a2618', '#120f0e', '#4a3020', '#2b1d14', '#1a1a1a'];
 
 function nuevoDia() {
   const seguia = reproduciendo;
+  ultimoAhora = '';
   const d = S.DIAS[sim.diaIdx], turnos = S.turnosDe(sim.caso);
   const res = S.simularDia(d.o, turnos, true), log = res.log;
   estado.crec = (d.n / S.PROMEDIO_DIA - 1) * 100;          // λ del día = λ promedio × pedidos del día / promedio
@@ -743,7 +813,7 @@ function nuevoDia() {
     pedidos: new Map(), cola: [], estaciones: turnos.map((h) => ({ activa: S.deTurno(h, 0), pedido: null })),
     flota: [0, 1, 2].map(() => ({ carga: 0, enCamino: 0, d: 0, fase: 'anden', viajes: 0, puerta: 1, pop: 0, humoT: 0 })), faltaron: 0,
     cont: { llegados: 0, despachados: 0, perdieron: 0, cancelados: 0, espera: 0, nEspera: 0, ventaPerdida: 0 },
-    lineas: S.lineasDia(d), conteo: S.nuevoConteo(),
+    lineas: S.lineasDia(d), conteo: S.nuevoConteo(), tipos: S.CASOS[sim.caso].turnos.map(([t]) => tipoTurno(t)),
     serie: { cola: [], turno: [] }, minuto: -1, servicios: log.filter((e) => e.tipo === 'inicio'), burbujas: [],
     humo: [], avisos: [], hora: 0, sel: null, hover: null, ocioMin: 0,
   };
@@ -1417,7 +1487,7 @@ function dibujarFoco(k) {
 }
 function dibujarFicha(k) {
   const per = dia.personas[k];
-  const lineas = [`D${k + 1} · ${per.activo || per.trabajo ? 'en turno' : 'fuera de turno'}`, ...queHace(per),
+  const lineas = [`D${k + 1} · ${TIPOS[dia.tipos[k]].nombre.toLowerCase()} · ${per.activo || per.trabajo ? 'en turno' : 'fuera de turno'}`, ...queHace(per),
     `Despachó ${per.despachados} pedido${per.despachados === 1 ? '' : 's'} hoy`];
   ctx.textBaseline = 'middle';
   ctx.font = `500 ${P.texto}px Barlow, sans-serif`;
@@ -1544,7 +1614,7 @@ function dibujar() {
     dibujarPersona(per.vx, per.vy, per.angVis + (libre ? 0.4 * Math.sin(dia.t * 0.2 + k * 1.7) : 0), {
       ropa: '#ec7a1c', chaleco: true, piel: per.piel, pelo: per.pelo, camina: per.camina, paso: per.paso,
       carga: per.carga, colores: tr ? [0, 1, 2].map((i) => colorTrabajo(tr, i)) : null, accion, sentado, come: sentado, t: sentado ? dia.t * 0.7 + k : dia.t * 0.8,
-      etiqueta: sentado ? null : `D${k + 1}`, etiquetaFondo: per.activo || tr ? C.acero : C['tinta-2'],
+      etiqueta: sentado ? null : `D${k + 1}`, etiquetaFondo: per.activo || tr ? TIPOS[dia.tipos[k]].color : C['tinta-2'],
     });
     if (tramo && tramo.tipo === 'recoger') dibujarRecogida(per, tramo, tr.id);
     if (ocioso(per)) dibujarZz(per.vx + 6 * P.esc, per.vy - 10 * P.esc, k);
@@ -1582,6 +1652,7 @@ function pintarContadores() {
     ['Espera promedio', c.nEspera ? `${numero(c.espera / c.nEspera, 1)} min` : '–'],
     ['Pagado sin pedidos hoy', `${numero(dia.ocioMin / 60, 1)} h <span class="ic">S/ ${numero((dia.ocioMin / 60) * COSTO_HORA, 2)}</span>`],
   ];
+  pintarPersonasAhora();
   $('contadores').innerHTML = datos.map(([dt, dd, malo]) => `<div class="${malo ? 'malo' : ''}"><dt>${dt}</dt><dd>${dd}</dd></div>`).join('');
 }
 
@@ -1711,7 +1782,7 @@ pintarGantt('p1');
 pintarResultados();
 pintarProductos();
 reiniciarAnio();
-elegirCasoSim('c2');
+elegirSim('fijos');
 crearGraficos();
 ponerVista(hayWebGL);
 if (!hayWebGL) $('vistaBarra').hidden = true;
