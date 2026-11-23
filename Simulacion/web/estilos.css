@@ -436,7 +436,7 @@ html { scroll-behavior: smooth; }
 .gantt .persona strong { font-weight: 600; }
 .gantt .persona span { margin-left: 6px; color: var(--tinta-2); font-size: 12px; }
 .gantt .celda { height: 22px; border-radius: 4px; }
-.gantt .celda.on { background: var(--acero); transform-origin: left; animation: crecer 500ms var(--curva) both; animation-delay: calc(var(--i) * 35ms); }
+.gantt .celda.on { background: var(--acero); transform-origin: left; animation: crecer 500ms var(--curva) both; animation-delay: calc(var(--i) * 12ms); }
 .gantt .celda.alm { border: 1px dashed var(--control); }
 .gantt .sep { grid-column: 1 / -1; height: 1px; margin: 6px 0 2px; background: var(--linea); }
 .gantt .fila-et { color: var(--tinta-2); font-size: 12px; }
@@ -704,3 +704,28 @@ details.mas[open] > summary { border-bottom: 1px solid var(--linea); }
 .recomendacion details.porque { margin-top: 10px; }
 .recomendacion details.porque summary { color: var(--verde); font-size: 14px; font-weight: 600; cursor: pointer; }
 .nota-larga { max-width: none; }
+
+/* ---------- Caso 2025: casos de la simulación, medio turno, formulación ---------- */
+.casos-chips button[aria-pressed="true"] { background: var(--tinta); border-color: var(--tinta); color: var(--hoja); }
+.casos-chips button.critica[aria-pressed="true"] { background: var(--rojo); border-color: var(--rojo); color: #fff; }
+.chip.mt { border-color: color-mix(in srgb, var(--serie-plan) 50%, transparent); background: color-mix(in srgb, var(--serie-plan) 12%, transparent); }
+.gantt .celda.on.mt { background: color-mix(in srgb, var(--serie-plan) 65%, var(--hoja)); }
+.plan-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 14px; }
+#planTexto .chip { display: inline-block; margin: 1px 2px; padding: 2px 8px; font-size: 12px; }
+#modelo .formulacion { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+#modelo .f-bloque { margin: 0; }
+#modelo .f-bloque p { margin: 4px 0; line-height: 1.45; }
+#modelo .f-bloque .sub { margin: 0 0 6px; font-size: 13px; }
+#modelo .f-bloque .f { font-weight: 600; font-size: 15px; }
+#simulacion .selector-plan { margin: 14px 0 4px; }
+#simulacion .selector-plan .velocidad { margin-left: 0; }
+#simulacion .selector-plan select, #simulacion .selector-plan input { max-width: 100%; height: 36px; padding: 0 8px; border: 1px solid var(--linea); border-radius: 8px; background: var(--hoja); color: var(--tinta); font: inherit; font-size: 14px; }
+#simulacion .reproductor { flex-wrap: wrap; }
+#contadoresAnio { margin-bottom: 12px; }
+#resultados .recomendacion { margin: 0 0 18px; }
+#resultados .resultados tr.mejor td { background: color-mix(in srgb, var(--verde) 10%, transparent); }
+@media (max-width: 860px) {
+  #modelo .formulacion { grid-template-columns: minmax(0, 1fr); }
+  #simulacion .selector-plan label { flex-wrap: wrap; }
+  #simulacion .selector-plan select { width: 100%; }
+}
