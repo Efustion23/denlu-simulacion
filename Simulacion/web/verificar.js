@@ -18,6 +18,7 @@ for (const id of Object.keys(S.CASOS)) {
   igual(`${id} % cancelados`, Math.round(a.pct * 100) / 100, r.pct);
   igual(`${id} espera media`, Math.round(a.espera * 100) / 100, r.espera);
   igual(`${id} venta perdida`, a.ventaPerdida, r.ventaPerdida, 0.05);
+  igual(`${id} ganancia perdida`, a.margenPerdido, r.margenPerdido, 0.05);
   igual(`${id} costo total`, a.total, r.total, 0.05);
   igual(`${id} cobertura`, JSON.stringify(S.HORAS.map((h) => S.turnosDe(id).filter((t) => t.includes(h)).length)) === JSON.stringify(S.CASOS[id].cobertura) ? 1 : 0, 1, 0);
 }
@@ -40,6 +41,16 @@ for (const id of Object.keys(S.CASOS)) {
     for (let i = 1; i < r.log.length; i++) if (r.log[i].t < r.log[i - 1].t) { fallas++; console.log('FALLA orden', id, d.fecha); break; }
   }
 }
+// Productos: el detalle de cada pedido suma su monto, y el conteo por sección cuadra con el catálogo exportado
+let difMonto = 0;
+S.DIAS.forEach((d) => S.lineasDia(d).forEach((ls, i) => { difMonto = Math.max(difMonto, Math.abs(ls.reduce((s, [k, q]) => s + q * S.CATALOGO[k].precio, 0) - d.o[4 * i + 2])); }));
+igual('monto = suma de productos', difMonto, 0, 0.02);
+const todo = S.nuevoConteo();
+S.DIAS.forEach((d) => S.contarDia(d, new Uint8Array(d.n), todo));      // como si nada se cancelara: toda la demanda
+S.CATALOGO.forEach((p, k) => igual(`unidades de ${p.nombre}`, todo.prod[k], p.unidades, 0));
+S.SECCIONES.forEach((x, i) => igual(`pedidos que visitan ${x.nombre}`, todo.sec[i].rec, x.visitas, 0));
+for (let i = 1; i < S.SECCIONES.length; i++) igual('secciones ordenadas por demanda', S.SECCIONES[i].visitas <= S.SECCIONES[i - 1].visitas ? 1 : 0, 1, 0);
+
 // M/M/c: con 2 despachadores hay horas con ρ >= 1 y con las propuestas todas quedan con ρ < 1
 igual('horas con ρ ≥ 1 hoy', S.LAMBDA.filter((l) => !S.mmc(l, 2).estable).length, 6, 0);
 for (const id of ['p1', 'p2']) igual(`${id} ρ < 1`, S.LAMBDA.every((l, i) => S.mmc(l, S.CASOS[id].cobertura[i]).rho <= 0.85) ? 1 : 0, 1, 0);

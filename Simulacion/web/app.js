@@ -102,7 +102,7 @@ function pintarProblema() {
   const datos = [
     [`${criticas} de 10`, 'horas con ρ ≥ 1: llegan más pedidos de los que 2 personas pueden despachar'],
     [`${numero(hoyR.pct, 1)} %`, `de los pedidos se canceló por esperar más de ${S.TOL} min (${numero(hoyR.cancelados)} de ${numero(S.P.pedidos)})`],
-    [soles(hoyR.ventaPerdida), `de venta perdida en 2025: ${soles(hoyR.margenPerdido)} de ganancia (margen ${numero(100 * S.MARGEN, 0)} %)`],
+    [soles(hoyR.ventaPerdida), `de venta perdida en 2025: ${soles(hoyR.margenPerdido)} de ganancia (margen promedio de los productos: ${numero(100 * S.MARGEN, 1)} %)`],
     [minutos(DATOS.diag.espera[peor]), `de espera media a las ${horaTexto(S.HORAS[peor])}; ${numero(Math.max(...DATOS.cola5), 1)} pedidos en cola en promedio en el peor momento`],
   ];
   $('evidencia').innerHTML = datos.map(([v, t]) => `<div><dt>${v}</dt><dd>${t}</dd></div>`).join('');
@@ -184,7 +184,7 @@ $('vistaGantt').addEventListener('click', (e) => { const b = e.target.closest('b
 const sim = { caso: 'c2', modo: 'anio', diaIdx: 0, acum: null, serie: [] };
 const CRITICOS = DATOS.criticos.map((c) => ({ ...c, idx: S.DIAS.findIndex((d) => d.fecha === c.fecha) }));
 // Ganancia perdida acumulada de hoy (2 fijos) día a día, para comparar
-const HOY_ACUM = ANUAL.c2.dias.reduce((a, d) => { a.push((a.length ? a[a.length - 1] : 0) + S.MARGEN * d.ventaPerdida); return a; }, []);
+const HOY_ACUM = ANUAL.c2.dias.reduce((a, d) => { a.push((a.length ? a[a.length - 1] : 0) + d.margenPerdido); return a; }, []);
 const planillaDias = (id, n) => (12 * S.CASOS[id].costoMes * n) / S.DIAS.length;
 
 $('casosSim').innerHTML = IDS.map((id) => `<button type="button" data-caso="${id}" class="${R[id].pct > 10 ? 'critica' : ''}">${S.CASOS[id].corto}</button>`).join('');
@@ -208,20 +208,22 @@ function pintarTarjeta() {
 }
 
 function reiniciarAnio() {
-  sim.acum = { dias: 0, pedidos: 0, cancelados: 0, ventaPerdida: 0, esperaTotal: 0 };
+  sim.acum = { dias: 0, pedidos: 0, cancelados: 0, ventaPerdida: 0, margenPerdido: 0, esperaTotal: 0 };
+  sim.conteo = S.nuevoConteo();
   sim.serie = [];
   pintarAnio();
 }
-function sumarDia(r) {
+function sumarDia(r, idx) {
   const a = sim.acum;
-  a.dias++; a.pedidos += r.pedidos; a.cancelados += r.cancelados; a.ventaPerdida += r.ventaPerdida; a.esperaTotal += r.esperaTotal;
-  sim.serie.push({ x: a.dias, y: S.MARGEN * a.ventaPerdida });
+  a.dias++; a.pedidos += r.pedidos; a.cancelados += r.cancelados; a.ventaPerdida += r.ventaPerdida; a.margenPerdido += r.margenPerdido; a.esperaTotal += r.esperaTotal;
+  S.contarDia(S.DIAS[idx], r.cancel, sim.conteo);
+  sim.serie.push({ x: a.dias, y: a.margenPerdido });
 }
 function pintarAnio() {
   const a = sim.acum, id = sim.caso, anio = sim.modo === 'anio';
   $('tituloAnio').textContent = anio ? `Acumulado de 2025 · ${S.CASOS[id].corto}` : `Todo 2025 con ${S.CASOS[id].corto} (para comparar)`;
-  const base = anio ? a : { dias: S.DIAS.length, pedidos: ANUAL[id].pedidos, cancelados: ANUAL[id].cancelados, ventaPerdida: ANUAL[id].ventaPerdida };
-  const planilla = planillaDias(id, base.dias), perdida = S.MARGEN * base.ventaPerdida, total = planilla + perdida;
+  const base = anio ? a : { dias: S.DIAS.length, pedidos: ANUAL[id].pedidos, cancelados: ANUAL[id].cancelados, ventaPerdida: ANUAL[id].ventaPerdida, margenPerdido: ANUAL[id].margenPerdido };
+  const planilla = planillaDias(id, base.dias), perdida = base.margenPerdido, total = planilla + perdida;
   const hoy = base.dias ? planillaDias('c2', base.dias) + HOY_ACUM[Math.min(base.dias, HOY_ACUM.length) - 1] : 0, dif = hoy - total;
   const datos = [
     ['Días simulados', `${base.dias} de ${S.DIAS.length}`],
@@ -235,12 +237,85 @@ function pintarAnio() {
   ];
   $('contadoresAnio').innerHTML = datos.map(([dt, dd, malo]) => `<div class="${malo ? 'malo' : ''}"><dt>${dt}</dt><dd>${dd}</dd></div>`).join('');
   if (graficos.anio) {
-    graficos.anio.data.datasets[0].data = anio ? sim.serie : ANUAL[id].dias.reduce((s, d, i) => { s.push({ x: i + 1, y: (s.length ? s[s.length - 1].y : 0) + S.MARGEN * d.ventaPerdida }); return s; }, []);
+    graficos.anio.data.datasets[0].data = anio ? sim.serie : ANUAL[id].dias.reduce((s, d, i) => { s.push({ x: i + 1, y: (s.length ? s[s.length - 1].y : 0) + d.margenPerdido }); return s; }, []);
     graficos.anio.data.datasets[0].label = `${S.CASOS[id].corto}: ganancia perdida acumulada`;
     graficos.anio.data.datasets[0].borderColor = COLOR_CASO()[id];
     graficos.anio.data.datasets[1].hidden = id === 'c2';
     graficos.anio.update('none');
   }
+}
+
+/* ---------- Conteo por sección del almacén (debajo de la simulación) ---------- */
+
+let vistaSec = 'hoy';
+const conteoAnioCaso = {};                                // todo 2025 de un caso, para el modo de un solo día
+function conteoAnual(id) {
+  if (!conteoAnioCaso[id]) { const c = S.nuevoConteo(); ANUAL[id].dias.forEach((r, i) => S.contarDia(S.DIAS[i], r.cancel, c)); conteoAnioCaso[id] = c; }
+  return conteoAnioCaso[id];
+}
+const CORTO_SEC = { 'Arroz y azúcar': 'Arroz y azúcar', 'Detergentes y limpieza': 'Detergentes', 'Bebidas': 'Bebidas', 'Lácteos': 'Lácteos',
+  'Aceites y conservas': 'Aceites', 'Fideos y harinas': 'Fideos', 'Galletas y golosinas': 'Galletas', 'Higiene personal': 'Higiene' };
+function pintarSecciones() {
+  if (!dia) return;
+  const anio = vistaSec === 'anio', c = anio ? (sim.modo === 'anio' ? sim.conteo : conteoAnual(sim.caso)) : dia.conteo;
+  const etiqueta = anio ? (sim.modo === 'anio' ? `${sim.acum.dias} días de 2025` : 'todo 2025') : fechaTexto(dia.fecha);
+  const maxRec = Math.max(1, ...c.sec.map((x) => x.rec));
+  const top = S.SECCIONES.map((_, i) => {
+    let mejor = -1, k = -1;
+    S.CATALOGO.forEach((p, j) => { if (p.seccion === i && c.prod[j] > mejor) { mejor = c.prod[j]; k = j; } });
+    return mejor > 0 ? `${S.CATALOGO[k].nombre} <span class="ic">${numero(mejor)} u</span>` : '–';
+  });
+  const tot = c.sec.reduce((a, x) => ({ rec: a.rec + x.rec, uni: a.uni + x.uni, venta: a.venta + x.venta, gan: a.gan + x.gan, perd: a.perd + x.perd }), { rec: 0, uni: 0, venta: 0, gan: 0, perd: 0 });
+  $('tituloSecciones').textContent = `Productos por sección · ${S.CASOS[sim.caso].corto} · ${etiqueta}`;
+  $('tablaSecciones').innerHTML = `<thead><tr><th>Sección (1 = más cerca de empaque)</th><th>Recorridos</th><th>Unidades despachadas</th><th>Venta</th><th>Ganancia</th><th>Unidades perdidas</th><th>Producto con más unidades</th></tr></thead>
+    <tbody>${S.SECCIONES.map((x, i) => { const v = c.sec[i]; return `<tr><td><span class="sw-sec" style="background:${x.color}"></span>${i + 1}. ${x.nombre}</td>
+      <td class="cifra"><span class="barra-sec"><i style="width:${(100 * v.rec) / maxRec}%;background:${x.color}"></i></span>${numero(v.rec)}</td><td class="cifra">${numero(v.uni)}</td>
+      <td class="cifra">${soles(v.venta)}</td><td class="cifra">${soles(v.gan)}</td><td class="cifra ${v.perd ? 'rojo' : ''}">${numero(v.perd)}</td><td>${top[i]}</td></tr>`; }).join('')}
+    <tr class="total"><td>Total</td><td class="cifra">${numero(tot.rec)}</td><td class="cifra">${numero(tot.uni)}</td><td class="cifra">${soles(tot.venta)}</td><td class="cifra">${soles(tot.gan)}</td><td class="cifra">${numero(tot.perd)}</td><td>${tot.venta ? `margen ${numero((100 * tot.gan) / tot.venta, 1)} %` : ''}</td></tr></tbody>`;
+}
+$('vistaSecciones').addEventListener('click', (e) => {
+  const b = e.target.closest('button');
+  if (!b) return;
+  vistaSec = b.dataset.sec;
+  document.querySelectorAll('#vistaSecciones button').forEach((x) => x.setAttribute('aria-pressed', x === b));
+  pintarSecciones();
+});
+
+/* ---------- Productos y secciones (paso 4) ---------- */
+
+// Productos ordenados por veces pedido, y clasificación ABC por valor vendido (Pareto): A hasta el 80 % de la venta,
+// B hasta el 95 %, C el resto
+const ABC = (() => {
+  const cat = S.CATALOGO, orden = cat.map((p, k) => k).sort((a, b) => cat[b].veces - cat[a].veces);
+  const porVenta = cat.map((p, k) => k).sort((a, b) => cat[b].venta - cat[a].venta);
+  const total = cat.reduce((s, p) => s + p.venta, 0), clase = [];
+  let acum = 0;
+  porVenta.forEach((k) => { const antes = acum / total; acum += cat[k].venta; clase[k] = antes < 0.8 ? 'A' : antes < 0.95 ? 'B' : 'C'; });
+  return { orden, clase };
+})();
+function pintarProductos() {
+  const cat = S.CATALOGO, venta = cat.reduce((s, p) => s + p.venta, 0), gan = cat.reduce((s, p) => s + p.ganancia, 0);
+  const top = cat[ABC.orden[0]], sec = S.SECCIONES[0], nA = ABC.clase.filter((c) => c === 'A').length;
+  const kpis = [
+    ['Producto más pedido', top.veces, (v) => `${numero(v)} veces`, top.nombre, true],
+    ['Sección más recorrida', sec.visitas, (v) => `${numero(v)} pedidos`, `${sec.nombre}: pasan por ella el ${numero((100 * sec.visitas) / S.P.pedidos, 0)} % de los pedidos`],
+    ['Margen de ganancia promedio', (100 * gan) / venta, (v) => `${numero(v, 1)} %`, `ganancia de ${soles(gan)} sobre ${soles(venta)} pedidos en 2025`],
+    ['Productos clase A', nA, (v) => `${numero(v)} de ${cat.length}`, 'hacen el 80 % de la venta (clasificación ABC)'],
+  ];
+  $('kpisProductos').innerHTML = kpis.map(([et, , , pie, lider]) => `<div class="${lider ? 'lider' : ''}"><dt>${et}</dt><dd>0</dd><span class="pie">${pie}</span></div>`).join('');
+  $('kpisProductos').querySelectorAll('dd').forEach((dd, i) => contar(dd, kpis[i][1], kpis[i][2], 1200));
+  $('tablaPorSeccion').innerHTML = `<thead><tr><th>Ubicación</th><th>Sección</th><th>Pedidos que la recorren</th><th>Veces pedido</th><th>Unidades</th><th>Venta</th><th>Margen</th><th>Ganancia</th><th>Más pedido</th></tr></thead>
+    <tbody>${S.SECCIONES.map((x, i) => {
+      const ps = cat.filter((p) => p.seccion === i), v = ps.reduce((a, p) => a + p.venta, 0), g = ps.reduce((a, p) => a + p.ganancia, 0);
+      const mas = ps.reduce((a, p) => (p.veces > a.veces ? p : a));
+      return `<tr><td class="cifra">${i + 1}</td><td><span class="sw-sec" style="background:${x.color}"></span>${x.nombre}</td><td class="cifra">${numero(x.visitas)} <span class="ic">${numero((100 * x.visitas) / S.P.pedidos, 0)} %</span></td>
+        <td class="cifra">${numero(ps.reduce((a, p) => a + p.veces, 0))}</td><td class="cifra">${numero(ps.reduce((a, p) => a + p.unidades, 0))}</td><td class="cifra">${soles(v)}</td>
+        <td class="cifra">${numero((100 * g) / v, 1)} %</td><td class="cifra">${soles(g)}</td><td>${mas.nombre}</td></tr>`;
+    }).join('')}</tbody>`;
+  $('tablaProductos').innerHTML = `<thead><tr><th>#</th><th>Producto</th><th>Sección</th><th>Veces pedido</th><th>Unidades</th><th>Precio</th><th>Margen</th><th>Venta</th><th>Ganancia</th><th>Clase ABC</th></tr></thead>
+    <tbody>${ABC.orden.map((k, n) => { const p = cat[k]; return `<tr><td class="cifra">${n + 1}</td><td>${p.nombre}</td><td>${S.SECCIONES[p.seccion].nombre}</td><td class="cifra">${numero(p.veces)}</td>
+      <td class="cifra">${numero(p.unidades)}</td><td class="cifra">${soles(p.precio, 2)}</td><td class="cifra">${numero(100 * p.margen, 0)} %</td><td class="cifra">${soles(p.venta)}</td>
+      <td class="cifra">${soles(p.ganancia)}</td><td class="cifra"><strong>${ABC.clase[k]}</strong></td></tr>`; }).join('')}</tbody>`;
 }
 
 function elegirCasoSim(id) {
@@ -270,7 +345,7 @@ $('fechaSel').addEventListener('change', (e) => {
 $('saltarAnio').addEventListener('click', () => {
   sim.modo = 'anio'; $('diaSel').value = 'anio';
   reiniciarAnio();
-  ANUAL[sim.caso].dias.forEach(sumarDia);
+  ANUAL[sim.caso].dias.forEach((r, i) => sumarDia(r, i));
   sim.diaIdx = S.DIAS.length - 1;
   nuevoDia();
   dia.sumado = true;                    // el último día ya está en el total: no se vuelve a sumar al terminar
@@ -381,6 +456,20 @@ const CREAR = {
       options: op,
     });
   },
+  top: () => {
+    const ks = ABC.orden.slice(0, 12), cat = S.CATALOGO;
+    const op = opcionesBase('Los 12 productos más pedidos en 2025 (veces que aparecen en un pedido)');
+    op.indexAxis = 'y';
+    op.plugins.legend.display = false;
+    op.scales.x = { ...op.scales.y };
+    op.scales.y = { grid: { display: false }, ticks: { color: C['tinta-2'], font: { family: FUENTE, size: 11 } } };
+    op.plugins.tooltip.callbacks = { label: (it) => { const p = cat[ks[it.dataIndex]]; return [`${numero(p.veces)} veces · ${numero(p.unidades)} unidades`, `${S.SECCIONES[p.seccion].nombre} · margen ${numero(100 * p.margen, 0)} % · ganancia ${soles(p.ganancia)}`]; } };
+    nuevo('top', 'gTop', {
+      type: 'bar',
+      data: { labels: ks.map((k) => cat[k].nombre), datasets: [{ ...barra('Veces pedido', ks.map((k) => S.SECCIONES[cat[k].seccion].color), ks.map((k) => cat[k].veces)), borderSkipped: 'start' }] },
+      options: op,
+    });
+  },
   mes: () => {
     const op = opcionesBase('Ganancia perdida por mes: la cola pesa más en las campañas');
     op.scales.y.ticks.callback = (v) => soles(v);
@@ -443,6 +532,7 @@ const alVer = {
   cola: () => { mostrarGraficos('rho', 'cola'); if (typeof DemoCola !== 'undefined') DemoCola.ver(); },
   modelo: () => { mostrarGraficos('cobertura'); pintarGantt('p1'); },
   simulacion: () => { if (!reducirMovimiento && dia.log.length && dia.t === 0) ponerReproduccion(true); },
+  productos: () => mostrarGraficos('top'),
   resultados: () => mostrarGraficos('costo', 'mes'),
 };
 const vistos = new Set();
@@ -506,7 +596,7 @@ const PLANOS = {
       bahias: [110, 260, 410].map((y) => ({ pie: [702, y], red: [688, y], camion: [728, y], texto: [728, y - 36], pila: [692, y + 30] })) },
     red: [[268, 145, 268, 505], [268, 398, 688, 398], [688, 110, 688, 505], [268, 145, 688, 145], [268, 225, 688, 225], [268, 305, 688, 305],
       [268, 505, 688, 505]],
-    etiquetas: [['Estantería', 290, 80], ['Mesas de empaque', 290, 462], ['Andén de carga', 728, 52]],
+    etiquetas: [['Mesas de empaque', 290, 462], ['Andén de carga', 728, 52]],
   },
   angosto: {
     W: 420, H: 802, esc: 1, escCamion: 0.85, texto: 12, aviso: [210, 240],
@@ -525,7 +615,7 @@ const PLANOS = {
       bahias: [76, 210, 344].map((x) => ({ pie: [x, 620], red: [x, 612], camion: [x, 644], texto: [x, 796], pila: [x + 34, 616] })) },
     red: [[20, 300, 400, 300], [110, 300, 110, 612], [110, 359, 404, 359], [110, 419, 404, 419], [110, 484, 404, 484], [110, 550, 404, 550],
       [30, 612, 390, 612]],
-    etiquetas: [['Estantería', 126, 312], ['Mesas de empaque', 126, 530]],
+    etiquetas: [['Mesas de empaque', 126, 530]],
   },
 };
 let P = PLANOS.ancho;
@@ -583,11 +673,17 @@ const lugarAsiento = (k) => { const a = P.comedor.asientos[k % 6]; return { punt
 const lugarMostrador = () => ({ punto: P.acopio.pie, ang: Math.PI / 2, salida: [] });
 const lugarPalet = (k) => { const [x, , w] = P.acopio.palet(k); return { punto: [x + w / 2, P.acopio.pieY], ang: Math.PI / 2, salida: [] }; };
 const lugarBahia = (k) => { const b = P.anden.bahias[k]; return { punto: b.pie, ang: P.anden.ang, salida: [b.red] }; };
-// El pedido `id` está en un estante al azar (fijo para ese pedido): pasillo, posición y lado
-function lugarEstante(id) {
-  const r = S.crearRng(9973 * id + 7), e = P.estantes;
-  const y = e.pasillos[Math.floor(r() * e.pasillos.length)];
-  return { punto: [Math.round(e.x + 16 + r() * (e.w - 32)), y], ang: r() < 0.5 ? -Math.PI / 2 : Math.PI / 2, salida: [] };
+// Secciones en la estantería: cada fila de estantes se divide en tramos y la sección más pedida (la 1) queda en la
+// fila de abajo, a la izquierda: la más cercana al tablero, al acopio y a las mesas de empaque.
+function zonaSeccion(i, plano = P) {
+  const e = plano.estantes, filas = e.filas.length, cols = Math.ceil(S.SECCIONES.length / filas);
+  const fila = filas - 1 - Math.floor(i / cols), col = i % cols, w = e.w / cols;
+  return { x: e.x + col * w, y: e.filas[fila], w, fila, pasillo: fila < e.pasillos.length ? e.pasillos[fila] : plano.mesas.pie };
+}
+// Donde se para quien recoge el producto k: en el pasillo de abajo de su sección, frente a su lugar en la repisa
+function lugarProducto(k) {
+  const p = S.CATALOGO[k], z = zonaSeccion(p.seccion), j = S.CATALOGO.filter((q, i) => q.seccion === p.seccion && i < k).length;
+  return { punto: [Math.round(z.x + 14 + ((z.w - 28) * (j + 0.5)) / 6), z.pasillo], ang: -Math.PI / 2, salida: [] };
 }
 const desdeLugar = (l) => [l.punto, ...l.salida];
 // Desde donde está la persona hasta el primer punto de los pasillos que tiene por delante
@@ -647,6 +743,7 @@ function nuevoDia() {
     pedidos: new Map(), cola: [], estaciones: turnos.map((h) => ({ activa: S.deTurno(h, 0), pedido: null })),
     flota: [0, 1, 2].map(() => ({ carga: 0, enCamino: 0, d: 0, fase: 'anden', viajes: 0, puerta: 1, pop: 0, humoT: 0 })), faltaron: 0,
     cont: { llegados: 0, despachados: 0, perdieron: 0, cancelados: 0, espera: 0, nEspera: 0, ventaPerdida: 0 },
+    lineas: S.lineasDia(d), conteo: S.nuevoConteo(),
     serie: { cola: [], turno: [] }, minuto: -1, servicios: log.filter((e) => e.tipo === 'inicio'), burbujas: [],
     humo: [], avisos: [], hora: 0, sel: null, hover: null, ocioMin: 0,
   };
@@ -666,6 +763,7 @@ function nuevoDia() {
     graficos.dia.update();
   }
   pintarContadores();
+  pintarSecciones();
 }
 
 function irA(per, lugar) {
@@ -680,27 +778,37 @@ function irA(per, lugar) {
 // estante 15 %, empacar 12 % y tomar la hoja del tablero 3 %. Todo cabe en el mismo tiempo de despacho.
 const PARTE = { hoja: 0.03, lista: 0.15, recoger: 0.15, revisar: 0.15, empacar: 0.12 };
 function asignar(per, ev) {
-  const k = ev.est, tablero = lugarTablero(), mostrador = lugarMostrador(), estante = lugarEstante(ev.id), palet = lugarPalet(k), mesa = lugarMesa(k);
-  const c = [camino(desdePersona(per), tablero), camino(desdeLugar(tablero), mostrador), camino(desdeLugar(mostrador), estante),
-    camino(desdeLugar(estante), palet), camino(desdeLugar(palet), mesa), camino(desdeLugar(mesa), lugarBahia(1))];
-  const L = c.map(largo), total = L.reduce((a, b) => a + b, 0);
-  const caminar = total > 0 ? 0.4 : 0, quieto = (1 - caminar) / 0.6;
-  // [tipo, etapa, lugar o camino, peso]
-  const partes = [['camino', 'alTablero', c[0], L[0]], ['hoja', 'hoja', tablero, PARTE.hoja * quieto],
-    ['camino', 'alMostrador', c[1], L[1]], ['lista', 'lista', mostrador, PARTE.lista * quieto],
-    ['camino', 'alEstante', c[2], L[2]], ['recoger', 'recoger', estante, PARTE.recoger * quieto],
-    ['camino', 'alPalet', c[3], L[3]], ['revisar', 'revisar', palet, PARTE.revisar * quieto],
-    ['camino', 'aLaMesa', c[4], L[4]], ['empacar', 'empacar', mesa, PARTE.empacar * quieto],
-    ['camino', 'alCamion', c[5], L[5]]];
-  let t = ev.t;
-  const tramos = partes.map(([tipo, etapa, dato, x]) => {
-    const t0 = t;
-    t += ev.dur * (tipo === 'camino' ? (total ? (caminar * x) / total : 0) : x);
-    return { tipo, etapa, dato, t0, t1: t };
+  const k = ev.est, tablero = lugarTablero(), mostrador = lugarMostrador(), palet = lugarPalet(k), mesa = lugarMesa(k);
+  // Una parada por cada sección del pedido (frente a su primer producto), de la más cercana a la más lejana
+  const lineas = dia.lineas[ev.id] || [], porSec = new Map();
+  lineas.forEach(([p]) => { const s = S.CATALOGO[p].seccion; if (!porSec.has(s)) porSec.set(s, p); });
+  const paradas = [...porSec.entries()].sort((a, b) => a[0] - b[0]).map(([s, p]) => ({ s, lugar: lugarProducto(p) }));
+  if (!paradas.length) paradas.push({ s: 0, lugar: lugarProducto(0) });
+  // [tipo, etapa, lugar o camino, peso (para las etapas quietas), datos extra]
+  const partes = [['camino', 'alTablero', camino(desdePersona(per), tablero)], ['hoja', 'hoja', tablero, PARTE.hoja],
+    ['camino', 'alMostrador', camino(desdeLugar(tablero), mostrador)], ['lista', 'lista', mostrador, PARTE.lista]];
+  let antes = mostrador;
+  paradas.forEach(({ s, lugar }) => {
+    const extra = { seccion: s, color: S.SECCIONES[s].color };
+    partes.push(['camino', 'alEstante', camino(desdeLugar(antes), lugar), 0, extra], ['recoger', 'recoger', lugar, PARTE.recoger / paradas.length, extra]);
+    antes = lugar;
   });
-  per.trabajo = { id: ev.id, mesa: k, tramos, fase: -1, camion: null };
+  partes.push(['camino', 'alPalet', camino(desdeLugar(antes), palet)], ['revisar', 'revisar', palet, PARTE.revisar],
+    ['camino', 'aLaMesa', camino(desdeLugar(palet), mesa)], ['empacar', 'empacar', mesa, PARTE.empacar],
+    ['camino', 'alCamion', camino(desdeLugar(mesa), lugarBahia(1))]);
+  const total = partes.reduce((a, x) => a + (x[0] === 'camino' ? largo(x[2]) : 0), 0);
+  const caminar = total > 0 ? 0.4 : 0, quieto = (1 - caminar) / 0.6;
+  let t = ev.t;
+  const tramos = partes.map(([tipo, etapa, dato, x, extra]) => {
+    const t0 = t;
+    t += ev.dur * (tipo === 'camino' ? (total ? (caminar * largo(dato)) / total : 0) : x * quieto);
+    return { tipo, etapa, dato, t0, t1: t, ...extra };
+  });
+  per.trabajo = { id: ev.id, mesa: k, tramos, fase: -1, camion: null, colores: paradas.map(({ s }) => S.SECCIONES[s].color) };
   per.ruta = [];
 }
+// Color de los productos que lleva una persona: el de las secciones que recorrió
+const colorTrabajo = (tr, i) => (tr.colores && tr.colores.length ? tr.colores[i % tr.colores.length] : PRODUCTOS[(tr.id + i) % PRODUCTOS.length]);
 
 // Se llena un camión a la vez: el del andén con más carga que todavía tiene espacio
 function elegirCamion() {
@@ -761,6 +869,7 @@ function aplicar(ev) {
     sacarDeCola();
     p.estado = 'cancelado';
     d.cont.ventaPerdida += ev.monto || 0;
+    S.sumarPedido(d.conteo, d.lineas[ev.id], false);
     d.cont.cancelados++; d.cont.espera += ev.t - p.llegada; d.cont.nEspera++;
     avisar(ev.motivo === 'stock' ? 'Sin stock' : 'Canceló', true);
   } else if (ev.tipo === 'inicio') {
@@ -781,6 +890,7 @@ function aplicar(ev) {
     d.pedidos.delete(ev.id);
     d.estaciones[ev.est].pedido = null;
     d.cont.despachados++; per.despachados++;
+    S.sumarPedido(d.conteo, d.lineas[ev.id], true);
     per.libreDesde = ev.t;
     irA(per, lugarMesa(ev.est));
   } else if (ev.tipo === 'sale') {
@@ -1067,18 +1177,26 @@ function sala(r, titulo) {
 const PRODUCTOS = ['#b5524a', '#3f7f5f', '#c9a227', '#4a6fa5', '#c19463', '#7a5c99'];
 function dibujarEstantes() {
   const e = P.estantes, r = S.crearRng(31);
-  e.filas.forEach((y) => {
-    rect(e.x, y, e.w, e.alto, 3); ctx.fillStyle = C.control; ctx.fill();
-    for (let x = e.x + 4; x < e.x + e.w - 12; x += 15) {
-      const c = PRODUCTOS[Math.floor(r() * PRODUCTOS.length)];
+  e.filas.forEach((y) => { rect(e.x, y, e.w, e.alto, 3); ctx.fillStyle = C.control; ctx.fill(); });
+  // Cada sección con sus productos del color de la sección, su número y su nombre (y los recorridos de hoy)
+  S.SECCIONES.forEach((sec, i) => {
+    const z = zonaSeccion(i);
+    for (let x = z.x + 5; x < z.x + z.w - 12; x += 15) {
       if (r() < 0.12) continue;                             // hueco en la estantería
-      ctx.fillStyle = c; ctx.globalAlpha = 0.85;
-      ctx.fillRect(x, y + 3, 12, e.alto / 2 - 4); ctx.fillRect(x + 1, y + e.alto / 2 + 1, 11, e.alto / 2 - 4);
+      ctx.fillStyle = sec.color; ctx.globalAlpha = 0.6 + 0.35 * r();
+      ctx.fillRect(x, z.y + 3, 12, e.alto / 2 - 4); ctx.fillRect(x + 1, z.y + e.alto / 2 + 1, 11, e.alto / 2 - 4);
       ctx.globalAlpha = 1;
     }
     ctx.fillStyle = C['tinta-2'];
-    for (let x = e.x; x <= e.x + e.w; x += e.w / 6) ctx.fillRect(Math.min(x, e.x + e.w - 3), y, 3, e.alto);   // parantes
+    ctx.fillRect(z.x, z.y, 3, e.alto);
+    const n = dia ? dia.conteo.sec[i].rec : 0, texto = `${i + 1}. ${CORTO_SEC[sec.nombre] || sec.nombre}${n ? ` · ${n}` : ''}`;
+    ctx.font = `600 ${P.texto - 2}px Barlow, sans-serif`;
+    const w = ctx.measureText(texto).width + 10;
+    ctx.fillStyle = sec.color; rect(z.x + 4, z.y - 13, w, 14, 7); ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.fillText(texto, z.x + 9, z.y - 2.5);
   });
+  ctx.fillStyle = C['tinta-2'];
+  e.filas.forEach((y) => ctx.fillRect(e.x + e.w - 3, y, 3, e.alto));
 }
 
 // Zona de acopio: marca en el piso, mostrador del encargado (con la lista que está haciendo) y un palé
@@ -1119,7 +1237,7 @@ function dibujarAcopio() {
     const hx = per.vx + Math.cos(per.angVis) * 10, hy = per.vy + Math.sin(per.angVis) * 10;
     for (let i = 0; i < 3; i++) {
       const q = suave(Math.min(1, Math.max(0, (f - i * 0.04) / 0.12))), tx = px + 3 + (i % 2) * 9, ty = py + 3 + Math.floor(i / 2) * 9;
-      ctx.fillStyle = PRODUCTOS[(id + i) % PRODUCTOS.length];
+      ctx.fillStyle = colorTrabajo(per.trabajo, i);
       ctx.fillRect(hx - 4 + (tx - hx + 4) * q, hy - 4 + (ty - hy + 4) * q - Math.sin(q * Math.PI) * 8, 8, 8);
     }
     const lx = px + pw - 15, ly = py + 2;
@@ -1243,7 +1361,7 @@ function dibujarRecogida(per, tramo, id) {
   const sx = per.vx + Math.cos(a) * 24 * e, sy = per.vy + Math.sin(a) * 24 * e;
   const hx = per.vx + Math.cos(a) * 8 * e, hy = per.vy + Math.sin(a) * 8 * e;
   const caja = (x, y, i) => {
-    ctx.fillStyle = PRODUCTOS[(id + i) % PRODUCTOS.length]; ctx.fillRect(x - 3.5, y - 3.5, 7, 7);
+    ctx.fillStyle = tramo.color || PRODUCTOS[(id + i) % PRODUCTOS.length]; ctx.fillRect(x - 3.5, y - 3.5, 7, 7);
     ctx.strokeStyle = 'rgba(0,0,0,0.3)'; ctx.lineWidth = 1; ctx.strokeRect(x - 3.5, y - 3.5, 7, 7);
   };
   for (let i = 0; i < 3; i++) {
@@ -1425,7 +1543,7 @@ function dibujar() {
     const libre = per.activo && !tr && !per.ruta.length;     // libre en su mesa: mira a su alrededor
     dibujarPersona(per.vx, per.vy, per.angVis + (libre ? 0.4 * Math.sin(dia.t * 0.2 + k * 1.7) : 0), {
       ropa: '#ec7a1c', chaleco: true, piel: per.piel, pelo: per.pelo, camina: per.camina, paso: per.paso,
-      carga: per.carga, colores: tr ? [0, 1, 2].map((i) => PRODUCTOS[(tr.id + i) % PRODUCTOS.length]) : null, accion, sentado, come: sentado, t: sentado ? dia.t * 0.7 + k : dia.t * 0.8,
+      carga: per.carga, colores: tr ? [0, 1, 2].map((i) => colorTrabajo(tr, i)) : null, accion, sentado, come: sentado, t: sentado ? dia.t * 0.7 + k : dia.t * 0.8,
       etiqueta: sentado ? null : `D${k + 1}`, etiquetaFondo: per.activo || tr ? C.acero : C['tinta-2'],
     });
     if (tramo && tramo.tipo === 'recoger') dibujarRecogida(per, tramo, tr.id);
@@ -1496,7 +1614,7 @@ $('otroDia').addEventListener('click', () => {
 $('velocidad').addEventListener('change', (e) => { velocidad = Number(e.target.value); });
 // Modo año: suma el día que terminó y pasa al siguiente
 function pasarDia() {
-  if (!dia.sumado) { sumarDia(dia.res); dia.sumado = true; }
+  if (!dia.sumado) { sumarDia(dia.res, sim.diaIdx); dia.sumado = true; }
   if (sim.diaIdx < S.DIAS.length - 1) sim.diaIdx++;
   pintarAnio();
 }
@@ -1556,7 +1674,7 @@ function narrar() {
   return `Se forma cola: ${enCola} hoja${enCola > 1 ? 's' : ''} en el tablero porque todos los despachadores están ocupados alistando y cargando.` + fuera;
 }
 
-let ultimoGrafico = 0;
+let ultimoGrafico = 0, ultimaTabla = 0;
 function cuadro(ms) {
   const dt = ultimoMs === null ? 0 : Math.min(0.1, (ms - ultimoMs) / 1000);
   ultimoMs = ms;
@@ -1571,6 +1689,7 @@ function cuadro(ms) {
     }
     pintarContadores();
     if (graficos.dia && ms - ultimoGrafico > 150) { graficos.dia.update(); ultimoGrafico = ms; }
+    if (ms - ultimaTabla > 400) { pintarSecciones(); ultimaTabla = ms; }
   }
   mover(corre ? dt : 0, dia.t - antes);
   // almacen3d.js se carga después de este archivo: hasta entonces el primer cuadro no dibuja el 3D
@@ -1590,6 +1709,7 @@ pintarProblema();
 pintarModelo();
 pintarGantt('p1');
 pintarResultados();
+pintarProductos();
 reiniciarAnio();
 elegirCasoSim('c2');
 crearGraficos();

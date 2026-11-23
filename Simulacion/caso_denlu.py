@@ -14,7 +14,46 @@ MU_MIN = 30.0                         # tiempo medio de servicio: alistar (~2/3)
 MU_H = 60 / MU_MIN                    # 2 pedidos por hora por despachador
 TOLERANCIA = 60                       # si un pedido espera más de 60 min pierde su camión y el cliente cancela
 C_ACTUAL = 2                          # despachadores fijos hoy
-MARGEN = 0.15                         # margen bruto de una venta mayorista (ganancia que se pierde al cancelar)
+# La ganancia de cada pedido sale del margen de cada producto (catálogo de abajo); en promedio es cerca del 13 %.
+
+# ---------------------------------------------------------------- Secciones y productos del almacén
+# (nombre, precio de venta S/ por unidad mayorista, margen bruto, popularidad relativa, unidades típicas por línea)
+SECCIONES = {
+    'Arroz y azúcar': [
+        ('Arroz extra, saco 50 kg', 185.00, 0.06, 9, 1.2), ('Arroz superior, bolsa 5 kg', 21.50, 0.08, 7, 4),
+        ('Azúcar rubia, saco 50 kg', 172.00, 0.05, 7, 1.1), ('Azúcar rubia, bolsa 5 kg', 19.00, 0.07, 6, 4),
+        ('Lenteja, bolsa 1 kg', 7.40, 0.12, 3, 5), ('Frejol canario, bolsa 1 kg', 9.90, 0.12, 2, 4)],
+    'Aceites y conservas': [
+        ('Aceite vegetal, caja 12 × 1 L', 96.00, 0.09, 8, 1.3), ('Aceite vegetal, botella 1 L', 8.40, 0.11, 5, 6),
+        ('Atún en lata, caja 48 u', 165.00, 0.10, 3, 1), ('Atún en lata, unidad', 5.20, 0.13, 4, 8),
+        ('Sardina en lata, caja 24 u', 62.00, 0.11, 2, 1), ('Mayonesa, doypack 1 kg', 14.50, 0.14, 2, 2)],
+    'Fideos y harinas': [
+        ('Fideo spaghetti, fardo 20 × 500 g', 52.00, 0.10, 7, 1.5), ('Fideo canuto, fardo 20 × 500 g', 50.00, 0.10, 4, 1.3),
+        ('Harina sin preparar, saco 50 kg', 150.00, 0.07, 2, 1), ('Harina preparada, bolsa 1 kg', 6.20, 0.13, 3, 5),
+        ('Avena, bolsa 900 g', 6.80, 0.14, 4, 6), ('Sémola, bolsa 1 kg', 5.90, 0.13, 2, 4)],
+    'Lácteos': [
+        ('Leche evaporada, caja 48 latas', 168.00, 0.08, 9, 1.3), ('Leche evaporada, lata 400 g', 3.70, 0.11, 6, 12),
+        ('Yogurt bebible, 1 L', 7.20, 0.16, 4, 6), ('Mantequilla, 200 g', 7.90, 0.15, 2, 4),
+        ('Queso fresco, kg', 18.00, 0.14, 2, 3), ('Leche condensada, lata', 7.50, 0.15, 2, 6)],
+    'Bebidas': [
+        ('Gaseosa 3 L, paquete 6 u', 46.00, 0.14, 7, 2), ('Gaseosa 500 ml, paquete 12 u', 24.00, 0.16, 5, 2),
+        ('Agua mineral 2.5 L, paquete 6 u', 18.00, 0.18, 4, 2), ('Cerveza, caja 12 × 620 ml', 66.00, 0.12, 6, 2),
+        ('Rehidratante 500 ml, paquete 12 u', 30.00, 0.18, 2, 1.5), ('Néctar de fruta, 1 L', 4.80, 0.20, 2, 6)],
+    'Detergentes y limpieza': [
+        ('Detergente en polvo, bolsa 4 kg', 38.00, 0.18, 8, 2), ('Detergente en polvo, bolsa 800 g', 8.90, 0.20, 6, 6),
+        ('Lejía, galón 4 L', 9.50, 0.22, 5, 4), ('Jabón de lavar, paquete 6 barras', 13.00, 0.21, 4, 3),
+        ('Lavavajilla en pasta, 1 kg', 11.50, 0.22, 3, 3), ('Papel higiénico, paquete 24 rollos', 32.00, 0.17, 5, 2)],
+    'Higiene personal': [
+        ('Champú, 1 L', 18.50, 0.24, 2, 2), ('Jabón de tocador, paquete 3 u', 8.40, 0.23, 3, 4),
+        ('Pasta dental, paquete 3 u', 12.00, 0.22, 3, 3), ('Toallas higiénicas, paquete 10 u', 5.50, 0.25, 2, 6),
+        ('Pañales, paquete 40 u', 42.00, 0.18, 3, 2), ('Desodorante, 150 ml', 11.00, 0.26, 1, 3)],
+    'Galletas y golosinas': [
+        ('Galletas de soda, paquete 6 × 6 u', 9.80, 0.22, 5, 4), ('Galletas dulces, caja 24 u', 18.00, 0.24, 4, 2),
+        ('Chocolate en barra, caja 24 u', 26.00, 0.26, 2, 1.5), ('Caramelos, bolsa 100 u', 6.50, 0.30, 3, 4),
+        ('Snacks salados, paquete 12 u', 14.00, 0.28, 2, 2), ('Panetón, caja 6 u', 120.00, 0.20, 1, 1.2)],
+}
+PRODUCTOS = [dict(id=i, seccion=s, producto=p, precio=pr, margen=m, popularidad=w, unidades_tipicas=q)
+             for i, (s, p, pr, m, w, q) in enumerate((s, *x) for s, xs in SECCIONES.items() for x in xs)]
 
 # Llegadas promedio por hora (pedidos/h) que se usaron para simular 2025
 LAMBDA_BASE = [2.4, 4.4, 5.4, 5.6, 4.2, 3.0, 4.4, 5.0, 3.8, 2.2]
@@ -130,7 +169,8 @@ def simular_anio(df, plan, tolerancia=TOLERANCIA):
         filas.append(dict(fecha=fecha, pedidos=len(g), cancelados=int(sum(can)),
                           espera_total=float(sum(e for e, c in zip(esp, can) if not c)),
                           venta=float(g['monto_pedido_S'].sum()),
-                          venta_perdida=float(g['monto_pedido_S'].values[np.array(can, bool)].sum())))
+                          venta_perdida=float(g['monto_pedido_S'].values[np.array(can, bool)].sum()),
+                          margen_perdido=float(g['margen_pedido_S'].values[np.array(can, bool)].sum())))
     return filas
 
 
